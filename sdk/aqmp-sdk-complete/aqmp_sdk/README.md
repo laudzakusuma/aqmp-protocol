@@ -14,12 +14,12 @@
 Migrating blockchain systems to Post-Quantum Cryptography (PQC) introduces a three-way optimization conflict we call the **PQC Blockchain Migration Trilemma**:
 
 ```
-                    QUANTUM SECURITY
-                           ▲
-                          / \
-                         /   \
-                        /     \
-          PERFORMANCE ◄──────────► COMPATIBILITY
+                    🔐 QUANTUM SECURITY
+                          ▲
+                         / \
+                        /   \
+                       /     \
+    ⚡ PERFORMANCE ◄──────────► 🔗 COMPATIBILITY
 ```
 
 **No existing approach satisfies all three simultaneously:**
@@ -104,7 +104,7 @@ from aqmp_sdk.oracle.threat_oracle import QuantumThreatOracle
 oracle = QuantumThreatOracle()
 oracle.simulate_year(2031)
 print(oracle.generate_threat_report())
-# YELLOW — Activate AQMP Phase 1
+# 🟡 YELLOW — Activate AQMP Phase 1
 ```
 
 ---

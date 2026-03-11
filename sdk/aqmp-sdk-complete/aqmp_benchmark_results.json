@@ -1,0 +1,227 @@
+{
+  "aqmp_version": "1.0.0",
+  "benchmark_timestamp": "2026-03-11T04:09:45.859237Z",
+  "n_samples": 30,
+  "results": {
+    "ECDSA-secp256k1": {
+      "algorithm": "ECDSA-secp256k1",
+      "timestamp": "2026-03-11T04:09:45.080119Z",
+      "keygen": {
+        "operation": "keygen",
+        "algorithm": "ECDSA-secp256k1",
+        "n_samples": 30,
+        "mean_ms": 1.1242771333333332,
+        "stddev_ms": 4.05038814655085,
+        "min_ms": 0.341807,
+        "max_ms": 22.569048,
+        "p50_ms": 0.384572,
+        "p95_ms": 0.472039,
+        "p99_ms": 22.569048,
+        "overhead_vs_ecdsa": null
+      },
+      "sign": {
+        "operation": "sign",
+        "algorithm": "ECDSA-secp256k1",
+        "n_samples": 30,
+        "mean_ms": 1.1132601,
+        "stddev_ms": 0.07594631011052115,
+        "min_ms": 1.058224,
+        "max_ms": 1.43627,
+        "p50_ms": 1.091762,
+        "p95_ms": 1.254083,
+        "p99_ms": 1.43627,
+        "overhead_vs_ecdsa": null
+      },
+      "verify": {
+        "operation": "verify",
+        "algorithm": "ECDSA-secp256k1",
+        "n_samples": 30,
+        "mean_ms": 0.37780590000000003,
+        "stddev_ms": 0.013830900013974207,
+        "min_ms": 0.354348,
+        "max_ms": 0.402546,
+        "p50_ms": 0.376753,
+        "p95_ms": 0.399945,
+        "p99_ms": 0.402546,
+        "overhead_vs_ecdsa": null
+      },
+      "sizes": {
+        "pub_key_bytes": 64,
+        "priv_key_bytes": 32,
+        "sig_bytes_mean": 64,
+        "sig_bytes_min": 64,
+        "sig_bytes_max": 64
+      },
+      "properties": {
+        "quantum_safe": false,
+        "nist_level": 0,
+        "basis": "Elliptic Curve (ECDLP)"
+      }
+    },
+    "FALCON-512": {
+      "algorithm": "FALCON-512",
+      "timestamp": "2026-03-11T04:09:45.782747Z",
+      "keygen": {
+        "operation": "keygen",
+        "algorithm": "FALCON-512",
+        "n_samples": 30,
+        "mean_ms": 15.916301,
+        "stddev_ms": 6.83407542601194,
+        "min_ms": 9.405259,
+        "max_ms": 36.709083,
+        "p50_ms": 13.742528,
+        "p95_ms": 34.756428,
+        "p99_ms": 36.709083,
+        "overhead_vs_ecdsa": null
+      },
+      "sign": {
+        "operation": "sign",
+        "algorithm": "FALCON-512",
+        "n_samples": 30,
+        "mean_ms": 4.539945366666666,
+        "stddev_ms": 1.3154871556733725,
+        "min_ms": 3.853651,
+        "max_ms": 11.110607,
+        "p50_ms": 4.223975,
+        "p95_ms": 5.880378,
+        "p99_ms": 11.110607,
+        "overhead_vs_ecdsa": null
+      },
+      "verify": {
+        "operation": "verify",
+        "algorithm": "FALCON-512",
+        "n_samples": 30,
+        "mean_ms": 0.04147253333333333,
+        "stddev_ms": 0.004887975081299239,
+        "min_ms": 0.038186,
+        "max_ms": 0.061115,
+        "p50_ms": 0.039038,
+        "p95_ms": 0.048762,
+        "p99_ms": 0.061115,
+        "overhead_vs_ecdsa": null
+      },
+      "sizes": {
+        "pub_key_bytes": 897,
+        "priv_key_bytes": 1281,
+        "sig_bytes_mean": 655.1666666666666,
+        "sig_bytes_min": 650,
+        "sig_bytes_max": 661
+      },
+      "properties": {
+        "quantum_safe": true,
+        "nist_level": 1,
+        "basis": "NTRU Lattice"
+      }
+    },
+    "ML-DSA-44 (Dilithium2)": {
+      "algorithm": "ML-DSA-44 (Dilithium2)",
+      "timestamp": "2026-03-11T04:09:45.807870Z",
+      "keygen": {
+        "operation": "keygen",
+        "algorithm": "ML-DSA-44 (Dilithium2)",
+        "n_samples": 30,
+        "mean_ms": 0.14160686666666666,
+        "stddev_ms": 0.030252000043010364,
+        "min_ms": 0.109151,
+        "max_ms": 0.236516,
+        "p50_ms": 0.132564,
+        "p95_ms": 0.213819,
+        "p99_ms": 0.236516,
+        "overhead_vs_ecdsa": null
+      },
+      "sign": {
+        "operation": "sign",
+        "algorithm": "ML-DSA-44 (Dilithium2)",
+        "n_samples": 30,
+        "mean_ms": 0.4665365,
+        "stddev_ms": 0.254473097886018,
+        "min_ms": 0.199915,
+        "max_ms": 1.185965,
+        "p50_ms": 0.401883,
+        "p95_ms": 1.089183,
+        "p99_ms": 1.185965,
+        "overhead_vs_ecdsa": null
+      },
+      "verify": {
+        "operation": "verify",
+        "algorithm": "ML-DSA-44 (Dilithium2)",
+        "n_samples": 30,
+        "mean_ms": 0.11580133333333334,
+        "stddev_ms": 0.030981289357124648,
+        "min_ms": 0.095706,
+        "max_ms": 0.206009,
+        "p50_ms": 0.102891,
+        "p95_ms": 0.189727,
+        "p99_ms": 0.206009,
+        "overhead_vs_ecdsa": null
+      },
+      "sizes": {
+        "pub_key_bytes": 1312,
+        "priv_key_bytes": 2560,
+        "sig_bytes_mean": 2420,
+        "sig_bytes_min": 2420,
+        "sig_bytes_max": 2420
+      },
+      "properties": {
+        "quantum_safe": true,
+        "nist_level": 2,
+        "basis": "Module-LWE"
+      }
+    },
+    "ML-DSA-65 (Dilithium3)": {
+      "algorithm": "ML-DSA-65 (Dilithium3)",
+      "timestamp": "2026-03-11T04:09:45.859123Z",
+      "keygen": {
+        "operation": "keygen",
+        "algorithm": "ML-DSA-65 (Dilithium3)",
+        "n_samples": 30,
+        "mean_ms": 0.24461213333333334,
+        "stddev_ms": 0.04538764613912661,
+        "min_ms": 0.195967,
+        "max_ms": 0.346803,
+        "p50_ms": 0.234431,
+        "p95_ms": 0.340435,
+        "p99_ms": 0.346803,
+        "overhead_vs_ecdsa": null
+      },
+      "sign": {
+        "operation": "sign",
+        "algorithm": "ML-DSA-65 (Dilithium3)",
+        "n_samples": 30,
+        "mean_ms": 0.8133304333333333,
+        "stddev_ms": 0.5101536287361561,
+        "min_ms": 0.280531,
+        "max_ms": 2.538441,
+        "p50_ms": 0.703243,
+        "p95_ms": 1.804076,
+        "p99_ms": 2.538441,
+        "overhead_vs_ecdsa": null
+      },
+      "verify": {
+        "operation": "verify",
+        "algorithm": "ML-DSA-65 (Dilithium3)",
+        "n_samples": 30,
+        "mean_ms": 0.1836851,
+        "stddev_ms": 0.02535274028357106,
+        "min_ms": 0.154285,
+        "max_ms": 0.240558,
+        "p50_ms": 0.175364,
+        "p95_ms": 0.228341,
+        "p99_ms": 0.240558,
+        "overhead_vs_ecdsa": null
+      },
+      "sizes": {
+        "pub_key_bytes": 1952,
+        "priv_key_bytes": 4032,
+        "sig_bytes_mean": 3309,
+        "sig_bytes_min": 3309,
+        "sig_bytes_max": 3309
+      },
+      "properties": {
+        "quantum_safe": true,
+        "nist_level": 3,
+        "basis": "Module-LWE"
+      }
+    }
+  }
+}
