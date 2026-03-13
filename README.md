@@ -19,7 +19,7 @@ Migrating blockchain systems to Post-Quantum Cryptography (PQC) introduces a thr
                           / \
                          /   \
                         /     \
-          PERFORMANCE ◄──────────► COMPATIBILITY
+          PERFORMANCE ◄─────────► COMPATIBILITY
 ```
 
 **No existing approach satisfies all three simultaneously:**
@@ -195,4 +195,4 @@ If you use AQMP in research, please cite:
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT - see [LICENSE](LICENSE)

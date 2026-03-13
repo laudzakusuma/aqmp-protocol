@@ -1,14 +1,13 @@
-"""
-AQMP Full Integration Demo
-===========================
-Demonstrates the complete AQMP framework:
-1. Real PQC algorithm benchmarks
-2. DCL transaction creation + verification
-3. ZK aggregation compression analysis
-4. Quantum Threat Oracle assessment
-5. Trilemma score computation
+# AQMP Full Integration Demo
+# Demonstrates the complete AQMP framework:
+# 1. Real PQC algorithm benchmarks
+# 2. DCL transaction creation + verification
+# 3. ZK aggregation compression analysis
+# 4. Quantum Threat Oracle assessment
+# 5. Trilemma score computation
 
-"""
+# Run this to generate all data for the academic paper.
+
 
 import sys
 import os
@@ -80,7 +79,7 @@ def demo_dcl_transactions():
     print("\nDemonstrating AQMP DCL transaction creation and verification...\n")
 
     # Create wallet
-    print("► Creating AQMP wallet (FALCON-512 + ECDSA)...")
+    print("Creating AQMP wallet (FALCON-512 + ECDSA)...")
     wallet = DCLWallet(pqc_algorithm="FALCON-512", phase=AQMPPhase.PHASE_1_DUAL_COMMIT)
     print(f"  Address: {wallet.address}")
     print(f"  ECDSA pub: {wallet.ecdsa_kp.public_key.hex()[:32]}...")
@@ -88,7 +87,7 @@ def demo_dcl_transactions():
     
     # Create transactions
     separator()
-    print("\n► Signing 3 transactions with DCL...\n")
+    print("\nSigning 3 transactions with DCL...\n")
     
     tx_data_list = [
         b'{"from": "aqmp1abc", "to": "aqmp1xyz", "amount": "1.5 ETH", "nonce": 1}',
@@ -117,7 +116,7 @@ def demo_dcl_transactions():
 
     # Verify transactions
     separator()
-    print("► Verifying transactions with AQMP-aware verifier...\n")
+    print("Verifying transactions with AQMP-aware verifier...\n")
     verifier = DCLVerifier(phase=AQMPPhase.PHASE_1_DUAL_COMMIT)
     
     for i, (tx, tx_data) in enumerate(transactions):

@@ -1,0 +1,59 @@
+{
+  "circuit_name": "AQMP-FALCON512-Plonky2",
+  "version": "1.0.0",
+  "parameters": {
+    "n": 512,
+    "q": 12289,
+    "beta_sq": 34034726,
+    "sigma": 165.736
+  },
+  "constraint_counts": {
+    "range_checks_s1": 7168,
+    "range_checks_s2": 7168,
+    "range_checks_h": 7168,
+    "ntt_poly_mul": 4608,
+    "verify_equation": 512,
+    "norm_bound": 1025,
+    "hash_binding": 256,
+    "total_estimate": 180000
+  },
+  "plonky2_config": {
+    "security_bits": 100,
+    "rate_bits": 3,
+    "cap_height": 4,
+    "fri_config": {
+      "rate_bits": 3,
+      "proof_of_work_bits": 16,
+      "num_query_rounds": 28,
+      "reduction_arity_bits": [
+        4,
+        4,
+        4,
+        4
+      ]
+    },
+    "estimated_gates": 500000,
+    "estimated_proof_size_bytes": 4096,
+    "estimated_prove_time_ms": 170,
+    "estimated_verify_time_ms": 5
+  },
+  "recursive_folding": {
+    "scheme": "Halo2 accumulation",
+    "accumulation_constraint_overhead": 2048,
+    "max_fold_depth": 20,
+    "final_proof_size_bytes": 8192,
+    "verify_time_ms": 8
+  },
+  "implementation_notes": [
+    "Custom Plonky2 NTT gate reduces n*log(n) butterfly constraints to n gates",
+    "Poseidon hash used for pk_hash binding (native to Plonky2)",
+    "Negacyclic NTT requires twisted roots of unity \u2014 handled by custom gate",
+    "Norm bound check: use RangeCheck gadget with 32-bit limbs",
+    "NOTICE: n=512 requires degree-512 polynomials \u2014 use degree-splitting if needed"
+  ],
+  "rust_dependencies": [
+    "plonky2 = { git = 'https://github.com/0xPolygonZero/plonky2' }",
+    "pqcrypto = '0.4'",
+    "sha3 = '0.10'"
+  ]
+}

@@ -1,26 +1,23 @@
-"""
-AQMP Quantum Threat Oracle (QTO)
-=================================
-Component 4 of AQMP: Monitors quantum computing threat indicators
-and triggers adaptive migration responses.
+# AQMP Quantum Threat Oracle (QTO)
+# Component 4 of AQMP: Monitors quantum computing threat indicators
+# and triggers adaptive migration responses.
 
-The QTO solves a key problem in PQC migration: the threat timeline is
-uncertain. Rather than hard-coding a migration deadline, AQMP allows the
-protocol to respond dynamically to actual quantum progress signals.
+# The QTO solves a key problem in PQC migration: the threat timeline is
+# uncertain. Rather than hard-coding a migration deadline, AQMP allows the
+# protocol to respond dynamically to actual quantum progress signals.
 
-Threat Model:
-  Level 0 (GREEN):  No credible CRQC threat. Classical + PQC hybrid active.
-  Level 1 (YELLOW): Signs of progress toward CRQC. Accelerate PQC adoption.
-  Level 2 (ORANGE): Verified CRQC capability imminent. Emergency migration.
-  Level 3 (RED):    CRQC confirmed operational. Immediate classical sunset.
+# Threat Model:
+#   Level 0 (GREEN):  No credible CRQC threat. Classical + PQC hybrid active.
+#   Level 1 (YELLOW): Signs of progress toward CRQC. Accelerate PQC adoption.
+#   Level 2 (ORANGE): Verified CRQC capability imminent. Emergency migration.
+#   Level 3 (RED):    CRQC confirmed operational. Immediate classical sunset.
 
-Oracle feeds (production):
-  - NIST PQC algorithm deprecation notices
-  - Qubit count milestones (IBM, Google, IonQ, QuEra, Quantinuum)
-  - Academic papers on lattice/NTRU attack improvements
-  - Anomaly detection on blockchain signature patterns
-  - Intelligence community threat assessments (public)
-"""
+# Oracle feeds (production):
+#   - NIST PQC algorithm deprecation notices
+#   - Qubit count milestones (IBM, Google, IonQ, QuEra, Quantinuum)
+#   - Academic papers on lattice/NTRU attack improvements
+#   - Anomaly detection on blockchain signature patterns
+#   - Intelligence community threat assessments (public)
 
 from __future__ import annotations
 import hashlib

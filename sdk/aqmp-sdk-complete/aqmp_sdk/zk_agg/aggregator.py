@@ -1,28 +1,25 @@
-"""
-AQMP ZK Aggregation Layer
-=========================
-Component 2 of AQMP: Aggregates multiple PQC signatures into a single
-compact proof, solving the Performance dimension of the trilemma.
+# AQMP ZK Aggregation Layer
+# Component 2 of AQMP: Aggregates multiple PQC signatures into a single
+# compact proof, solving the Performance dimension of the trilemma.
 
-PRODUCTION: Would use Plonky2/Halo2/STARK circuits.
-THIS IMPLEMENTATION: Cryptographically sound simulation using:
-  - Merkle-based commitment aggregation
-  - Hash-based recursive accumulator
-  - Verifiable aggregate proofs with tamper detection
+# PRODUCTION: Would use Plonky2/Halo2/STARK circuits.
+# THIS IMPLEMENTATION: Cryptographically sound simulation using:
+#   - Merkle-based commitment aggregation
+#   - Hash-based recursive accumulator
+#   - Verifiable aggregate proofs with tamper detection
 
-The cryptographic properties preserved:
-  1. Soundness: Any modified signature invalidates the aggregate proof
-  2. Completeness: Valid signature set always produces valid aggregate
-  3. Succinctness: Proof size O(log N) regardless of N signatures
-  4. Non-interactivity: Prover generates proof without verifier interaction
+# The cryptographic properties preserved:
+#   1. Soundness: Any modified signature invalidates the aggregate proof
+#   2. Completeness: Valid signature set always produces valid aggregate
+#   3. Succinctness: Proof size O(log N) regardless of N signatures
+#   4. Non-interactivity: Prover generates proof without verifier interaction
 
-Block overhead analysis:
-  N=1   tx: 666B (FALCON) → 3064B aggregate (4.6× WORSE — not worth it)
-  N=10  tx: 6660B naive  → 3096B aggregate (2.2× better)
-  N=50  tx: 33300B naive → 3264B aggregate (10.2× better)
-  N=200 tx: 133200B naive→ 3544B aggregate (37.6× better) ← typical block
-  N=1000tx: 666000B naive→ 4064B aggregate (163× better)
-"""
+# Block overhead analysis:
+#   N=1   tx: 666B (FALCON) → 3064B aggregate (4.6× WORSE — not worth it)
+#   N=10  tx: 6660B naive  → 3096B aggregate (2.2× better)
+#   N=50  tx: 33300B naive → 3264B aggregate (10.2× better)
+#   N=200 tx: 133200B naive→ 3544B aggregate (37.6× better) ← typical block
+#   N=1000tx: 666000B naive→ 4064B aggregate (163× better)
 
 from __future__ import annotations
 import hashlib
@@ -59,7 +56,7 @@ class AggregateProof:
       state_hash     : 32B (rolling hash proving correct accumulation)
       nullifier_set  : 32B (prevent double-spend attacks)
       metadata       : 8B  (block_height, timestamp)
-      ─────────────────
+
       Fixed overhead : 112B
       Merkle path    : 32 × log2(N) B  (varies with N)
     """

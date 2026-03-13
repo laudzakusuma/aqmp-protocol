@@ -1,29 +1,30 @@
-"""
-AQMP Dual-Commit Layer (DCL)
-Component 1 of AQMP: Embeds a quantum-safe cryptographic commitment
-alongside every classical ECDSA transaction, achieving:
+# AQMP Dual-Commit Layer (DCL)
 
-  - Backward compatibility: legacy nodes see valid ECDSA + OP_RETURN
-  - Forward quantum security: PQC-aware nodes verify PQC commitment
-  - Zero hard-fork requirement: fully soft-fork deployable
+# Component 1 of AQMP: Embeds a quantum-safe cryptographic commitment
+# alongside every classical ECDSA transaction, achieving:
 
-DCL Transaction Structure:
+#   - Backward compatibility: legacy nodes see valid ECDSA + OP_RETURN
+#   - Forward quantum security: PQC-aware nodes verify PQC commitment
+#   - Zero hard-fork requirement: fully soft-fork deployable
 
-  ECDSA Signature    (64B)  ← legacy nodes verify
-  PQC Commitment     (32B)  ← H(PQC_Sig||PK||Nonce)
-  ZK Pointer         (32B)  ← Merkle root of proofs
-  Algorithm Tag      (1B)   ← PQC algo identifier   
+# DCL Transaction Structure:
+  
+#   ECDSA Signature    (64B)  ← legacy nodes verify
+#   PQC Commitment     (32B)  ← H(PQC_Sig||PK||Nonce) 
+#   ZK Pointer         (32B)  ← Merkle root of proofs
+#   Algorithm Tag      (1B)   ← PQC algo identifier
+  
 
-Security argument:
-  - Classical attacker: cannot forge ECDSA → transaction rejected
-  - Quantum attacker: can forge ECDSA, but cannot forge PQC commitment
-    (requires breaking Module-LWE or NTRU hardness)
-  - After Phase 2: PQC commitment is primary; ECDSA is deprecated
+# Security argument:
+#   - Classical attacker: cannot forge ECDSA → transaction rejected
+#   - Quantum attacker: can forge ECDSA, but cannot forge PQC commitment
+#     (requires breaking Module-LWE or NTRU hardness)
+#   - After Phase 2: PQC commitment is primary; ECDSA is deprecated
 
-This provides a quantifiable security transition: at any protocol phase,
-  SecurityLevel = max(ECDSA_security × (1 - phase/3), PQC_security × phase/3)
-where phase ∈ {0,1,2,3}.
-"""
+# This provides a quantifiable security transition: at any protocol phase,
+#   SecurityLevel = max(ECDSA_security × (1 - phase/3), PQC_security × phase/3)
+# where phase ∈ {0,1,2,3}.
+
 from __future__ import annotations
 import hashlib
 import hmac
@@ -150,7 +151,7 @@ class DCLTransaction:
       ecdsa_pubkey : 64B
       pqc_metadata : 49B  (commitment + nonce + tag)
       zk_pointer   : 32B
-      ─────────────────
+
       Total        : 241B  (vs 160B ECDSA-only = +51% overhead)
       
       After ZK aggregation (Phase 2): 32B (just ZK pointer) = -80%

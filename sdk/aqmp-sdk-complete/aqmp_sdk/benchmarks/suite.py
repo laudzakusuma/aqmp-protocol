@@ -1,15 +1,13 @@
-"""
-AQMP Benchmark Suite
-Runs rigorous benchmarks on all PQC algorithms vs ECDSA baseline.
-Produces the raw data for the trilemma proof and academic paper.
+# AQMP Benchmark Suite
+# Runs rigorous benchmarks on all PQC algorithms vs ECDSA baseline.
+# Produces the raw data for the trilemma proof and academic paper.
 
-Methodology:
-- N iterations per operation (default: 100 for fast, 1000 for rigorous)  
-- Warm-up runs discarded
-- Reports: mean, stddev, min, max, p50, p95, p99
-- Measures: keygen, sign, verify, sig_size, key_sizes
-- Computes: overhead ratios vs ECDSA baseline
-"""
+# Methodology:
+# - N iterations per operation (default: 100 for fast, 1000 for rigorous)  
+# - Warm-up runs discarded
+# - Reports: mean, stddev, min, max, p50, p95, p99
+# - Measures: keygen, sign, verify, sig_size, key_sizes
+# - Computes: overhead ratios vs ECDSA baseline
 
 from __future__ import annotations
 import time

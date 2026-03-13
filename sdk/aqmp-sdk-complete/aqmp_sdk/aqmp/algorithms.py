@@ -1,8 +1,7 @@
-"""
-AQMP Algorithm Registry
-Wraps all NIST PQC standard algorithms + classical ECDSA into a unified interface.
-Used as the foundation for Dual-Commit Layer and ZK Aggregation components.
-"""
+# AQMP Algorithm Registry
+# Wraps all NIST PQC standard algorithms + classical ECDSA into a unified interface.
+# Used as the foundation for Dual-Commit Layer and ZK Aggregation components.
+
 
 from __future__ import annotations
 import time
