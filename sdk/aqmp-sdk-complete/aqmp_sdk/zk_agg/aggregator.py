@@ -332,3 +332,56 @@ def analyze_compression_at_scale(sig_size: int = 666,
             "aqmp_better_than_naive": aqmp_proof_bytes < naive_pqc_bytes,
         })
     return results
+
+
+def analyze_compression_at_scale_v2(
+    block_sizes: List[int] = None,
+    layer: str = "EL",
+    plonky3_active: bool = True,
+) -> List[Dict]:
+    """AQMP v2.0 empirical byte-footprint compression analysis via APSE v2.0."""
+    try:
+        from aqmp_sdk.apse.engine import (
+            AdaptiveParameterSelectionEngine,
+            labrador_el_indexed_bytes,
+            labrador_cl_indexed_bytes,
+            plonky3_indexed_bytes,
+        )
+    except ImportError:
+        from apse.engine import (
+            AdaptiveParameterSelectionEngine,
+            labrador_el_indexed_bytes,
+            labrador_cl_indexed_bytes,
+            plonky3_indexed_bytes,
+        )
+
+    if block_sizes is None:
+        block_sizes = [1, 6, 80, 81, 110, 111, 250, 1000]
+
+    engine = AdaptiveParameterSelectionEngine()
+    results = []
+    for n in block_sizes:
+        sel = engine.select_mode(n_tx=n, layer=layer, plonky3_active=plonky3_active)
+        labrador_b = (
+            labrador_el_indexed_bytes(n)
+            if layer.upper() == "EL"
+            else labrador_cl_indexed_bytes(n)
+        )
+        plonky3_b = plonky3_indexed_bytes(n)
+        results.append(
+            {
+                "n_tx": n,
+                "layer": sel.layer,
+                "selected_mode": sel.mode.value,
+                "selected_payload_bytes": sel.payload_bytes,
+                "ecdsa_baseline_bytes": sel.ecdsa_baseline_bytes,
+                "falcon_kr_bytes": sel.falcon_kr_bytes,
+                "labrador_indexed_bytes": labrador_b,
+                "plonky3_indexed_bytes": plonky3_b,
+                "mldsa65_baseline_bytes": sel.mldsa65_baseline_bytes,
+                "overhead_vs_ecdsa": sel.overhead_vs_ecdsa,
+                "reduction_vs_mldsa65_pct": sel.reduction_vs_mldsa65_pct,
+                "beats_ecdsa": sel.payload_bytes < sel.ecdsa_baseline_bytes,
+            }
+        )
+    return results

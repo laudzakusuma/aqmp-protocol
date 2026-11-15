@@ -1,0 +1,60 @@
+{
+  "circuit_name": "AQMP-v2-FALCON512-Plonky3-BabyBear",
+  "version": "2.0.0",
+  "architecture": "Two-Stage STARK-to-SNARK Recursive Aggregation with 4B KeyRegistry",
+  "field": {
+    "name": "BabyBear",
+    "prime_p": 2013265921,
+    "prime_formula": "2^31 - 2^27 + 1",
+    "bit_width": 31,
+    "extension_degree": 4,
+    "extension_bits": 124
+  },
+  "hash_primitive": {
+    "name": "Poseidon2",
+    "width": 16,
+    "rate": 8,
+    "capacity": 8,
+    "security_bits": 128
+  },
+  "falcon512_parameters": {
+    "n": 512,
+    "q": 12289,
+    "public_key_bytes": 897,
+    "salt_r_bytes": 40,
+    "standard_sig_bytes": 626,
+    "key_recovery_sig_bytes": 650,
+    "key_registry_index_bytes": 4
+  },
+  "two_stage_recursion": {
+    "stage_1_inner_stark": {
+      "proving_system": "Plonky3-FRI (BabyBear)",
+      "blowup_factor": 8,
+      "fri_queries": 100,
+      "conjectured_security_bits": 128,
+      "witness_elements": [
+        "falcon_key_recovery_poly_s2",
+        "salt_r_40B",
+        "key_registry_idx_4B",
+        "msg_digest_32B"
+      ]
+    },
+    "stage_2_outer_compression": {
+      "proving_system": "Recursive STARK-to-SNARK Wrapper",
+      "final_proof_bytes": 300,
+      "per_tx_on_chain_bytes": 44,
+      "per_tx_breakdown": "40B salt R + 4B KeyRegistry index",
+      "payload_equation_bytes": "300 + 44 * N"
+    }
+  },
+  "apse_v2_targets": {
+    "proving_budget_ms": 810.0,
+    "verify_latency_ms": 4.2,
+    "breakeven_vs_ecdsa_tx": 6,
+    "breakeven_vs_falcon_kr_tx": 1,
+    "payload_at_n250_bytes": 11300,
+    "ecdsa_payload_at_n250_bytes": 24000,
+    "mldsa65_payload_at_n250_bytes": 1315250,
+    "fallback_prover": "LaBRADOR (50 KiB + floor(128*log2(max(N,2))) EL / 70 KiB CL)"
+  }
+}

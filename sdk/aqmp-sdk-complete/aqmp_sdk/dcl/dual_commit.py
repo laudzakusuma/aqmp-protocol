@@ -32,13 +32,21 @@ import os
 import struct
 import time
 from dataclasses import dataclass, field
-from typing import Optional, List, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from enum import IntEnum
 
-from aqmp.algorithms import (
-    ECDSA_secp256k1, MLDSA44, FALCON512,
-    KeyPair, Signature, get_algorithm
-)
+try:
+    from aqmp_sdk.aqmp.algorithms import (
+        ECDSA_secp256k1, MLDSA44, FALCON512,
+        KeyPair, Signature, get_algorithm
+    )
+    from aqmp_sdk.oracle.threat_oracle import verify_confirmation_window
+except ImportError:
+    from aqmp.algorithms import (
+        ECDSA_secp256k1, MLDSA44, FALCON512,
+        KeyPair, Signature, get_algorithm
+    )
+    from oracle.threat_oracle import verify_confirmation_window
 
 
 class AQMPPhase(IntEnum):
@@ -213,8 +221,7 @@ class DCLTransaction:
                 return False, f"Unknown algorithm tag: {tag}"
 
         # Reconstruct Signature object for verification
-        from aqmp.algorithms import Signature as Sig
-        pqc_sig_obj = Sig(
+        pqc_sig_obj = Signature(
             algorithm=self.pqc_commitment.algorithm_tag.name,
             message_hash=hashlib.sha3_256(message).digest(),
             signature_bytes=self.pqc_commitment.pqc_sig_bytes,
@@ -352,3 +359,322 @@ class DCLVerifier:
         )
 
         return report["is_valid"], report
+
+
+# ---------------------------------------------------------------------------
+# AQMP v2.0: Hash-Based Dual-Commit XOR & Ephemeral Key Rotation Verifier
+# ---------------------------------------------------------------------------
+DUAL_COMMIT_TX1_BYTES = 32
+DUAL_COMMIT_TX2_BYTES = 64
+DUAL_COMMIT_CYCLE_BYTES = DUAL_COMMIT_TX1_BYTES + DUAL_COMMIT_TX2_BYTES  # 96 B/tx
+FORS_C_CYCLE_BYTES = 2336 + 20                                         # 2356 B/tx
+MLDSA65_CYCLE_BYTES = 1952 + 3309                                      # 5261 B/tx
+DEFAULT_NETWORK_NODES = 15_000
+
+
+def _compute_256bit_hash(data: bytes, hash_alg: str = "sha256") -> bytes:
+    """Compute a 32-byte digest using sha256, sha3_256, or keccak256."""
+    alg = hash_alg.lower()
+    if alg == "sha256":
+        return hashlib.sha256(data).digest()
+    if alg in ("sha3_256", "sha3-256"):
+        return hashlib.sha3_256(data).digest()
+    if alg in ("keccak256", "keccak-256"):
+        try:
+            from Crypto.Hash import keccak as _pycrypto_keccak
+
+            k = _pycrypto_keccak.new(digest_bits=256)
+            k.update(data)
+            return k.digest()
+        except ImportError:
+            try:
+                from eth_hash.auto import keccak as _eth_keccak
+
+                return _eth_keccak(data)
+            except ImportError as exc:
+                raise RuntimeError(
+                    "keccak256 requires pycryptodome or eth-hash installed"
+                ) from exc
+    raise ValueError(
+        f"Unsupported hash_alg {hash_alg!r}; expected 'sha256', 'sha3_256', or 'keccak256'"
+    )
+
+
+def _xor_32(a: bytes, b: bytes) -> bytes:
+    """XOR two equal-length 32-byte digests."""
+    if len(a) != 32 or len(b) != 32:
+        raise ValueError(f"Expected 32-byte operands, got {len(a)} and {len(b)}")
+    return bytes(x ^ y for x, y in zip(a, b))
+
+
+@dataclass(frozen=True)
+class DualCommitXORCommitTx:
+    """Tx1 Commit Payload (32 B): C = H(x) XOR H(x || m)."""
+
+    commitment: bytes
+    hash_alg: str = "sha256"
+
+    def __post_init__(self) -> None:
+        if len(self.commitment) != DUAL_COMMIT_TX1_BYTES:
+            raise ValueError(
+                f"Commit Tx1 must be {DUAL_COMMIT_TX1_BYTES} bytes, got {len(self.commitment)}"
+            )
+
+    @property
+    def size_bytes(self) -> int:
+        return len(self.commitment)
+
+
+@dataclass(frozen=True)
+class DualCommitXORRevealTx:
+    """Tx2 Reveal & Rotation Payload (64 B): preimage x (32 B) + rotated y' = H(x') (32 B)."""
+
+    revealed_secret_x: bytes
+    next_anchor_y_prime: bytes
+    hash_alg: str = "sha256"
+
+    def __post_init__(self) -> None:
+        if len(self.revealed_secret_x) != 32:
+            raise ValueError(
+                f"Revealed secret x must be 32 bytes, got {len(self.revealed_secret_x)}"
+            )
+        if len(self.next_anchor_y_prime) != 32:
+            raise ValueError(
+                f"Rotated anchor y' must be 32 bytes, got {len(self.next_anchor_y_prime)}"
+            )
+
+    @property
+    def size_bytes(self) -> int:
+        return len(self.revealed_secret_x) + len(self.next_anchor_y_prime)
+
+
+@dataclass(frozen=True)
+class DualCommitXORVerificationResult:
+    """Result of verifying a Dual-Commit XOR commit-reveal-rotate cycle."""
+
+    valid: bool
+    anchor_matched: bool
+    xor_commit_matched: bool
+    rotated_anchor: Optional[bytes]
+    total_cycle_bytes: int
+    window_compliant: Optional[bool]
+    delta_star_blocks: Optional[int]
+    reason: str
+
+
+class DualCommitXORVerifier:
+    """AQMP v2.0 Dual-Commit XOR & Ephemeral Key Rotation Verifier (96 B/tx).
+
+    Protocol cycle:
+      Setup/Prior anchor: y = H(x) (32 B)
+      Tx1 (Commit, 32 B): C = H(x) XOR H(x || m)
+      Tx2 (Reveal+Rotate, 64 B): (x, y' = H(x'))
+      Verification:
+        1. H(x) == y (preimage binds to committed anchor)
+        2. H(x) XOR H(x || m) == C (commit binds to message m)
+        3. y' != y and x not previously spent (replay/reuse protection)
+        4. Optional Fukuda window check: Delta_eff >= Delta*(epsilon)
+        5. Active anchor rotates y <- y'
+    """
+
+    def __init__(self, hash_alg: str = "sha256", track_replay: bool = True) -> None:
+        self.hash_alg = hash_alg.lower()
+        # Validate hash algorithm early
+        _compute_256bit_hash(b"aqmp_init", self.hash_alg)
+        self.track_replay = track_replay
+        self._spent_secrets: Set[bytes] = set()
+
+    def hash_digest(self, data: bytes) -> bytes:
+        return _compute_256bit_hash(data, self.hash_alg)
+
+    def create_anchor(self, secret_x: bytes) -> bytes:
+        """Compute initial anchor y = H(x) (32 bytes)."""
+        if len(secret_x) != 32:
+            raise ValueError(f"secret_x must be 32 bytes, got {len(secret_x)}")
+        return self.hash_digest(secret_x)
+
+    def create_commit(self, secret_x: bytes, message: bytes) -> DualCommitXORCommitTx:
+        """Create Tx1 commitment (32 B): C = H(x) XOR H(x || m)."""
+        if len(secret_x) != 32:
+            raise ValueError(f"secret_x must be 32 bytes, got {len(secret_x)}")
+        h_x = self.hash_digest(secret_x)
+        h_xm = self.hash_digest(secret_x + message)
+        return DualCommitXORCommitTx(
+            commitment=_xor_32(h_x, h_xm),
+            hash_alg=self.hash_alg,
+        )
+
+    def create_reveal(
+        self, secret_x: bytes, next_secret_x_prime: bytes
+    ) -> DualCommitXORRevealTx:
+        """Create Tx2 reveal & ephemeral key rotation (64 B): (x, y' = H(x'))."""
+        if len(secret_x) != 32 or len(next_secret_x_prime) != 32:
+            raise ValueError("Both secret_x and next_secret_x_prime must be 32 bytes")
+        if hmac.compare_digest(secret_x, next_secret_x_prime):
+            raise ValueError("next_secret_x_prime must differ from secret_x for safe rotation")
+        y_prime = self.hash_digest(next_secret_x_prime)
+        return DualCommitXORRevealTx(
+            revealed_secret_x=secret_x,
+            next_anchor_y_prime=y_prime,
+            hash_alg=self.hash_alg,
+        )
+
+    def verify_and_rotate(
+        self,
+        anchor_y: bytes,
+        commit_tx: DualCommitXORCommitTx,
+        reveal_tx: DualCommitXORRevealTx,
+        message: bytes,
+        delta_eff: Optional[int] = None,
+        epsilon: Optional[float] = None,
+    ) -> DualCommitXORVerificationResult:
+        """Verify Commit Tx1 + Reveal Tx2 against anchor y and message m, then rotate y -> y'."""
+        total_bytes = commit_tx.size_bytes + reveal_tx.size_bytes
+        if len(anchor_y) != 32:
+            return DualCommitXORVerificationResult(
+                valid=False,
+                anchor_matched=False,
+                xor_commit_matched=False,
+                rotated_anchor=None,
+                total_cycle_bytes=total_bytes,
+                window_compliant=None,
+                delta_star_blocks=None,
+                reason=f"Invalid anchor length: expected 32 B, got {len(anchor_y)} B",
+            )
+
+        if commit_tx.hash_alg.lower() != self.hash_alg or reveal_tx.hash_alg.lower() != self.hash_alg:
+            return DualCommitXORVerificationResult(
+                valid=False,
+                anchor_matched=False,
+                xor_commit_matched=False,
+                rotated_anchor=None,
+                total_cycle_bytes=total_bytes,
+                window_compliant=None,
+                delta_star_blocks=None,
+                reason="Hash algorithm mismatch between verifier and tx payloads",
+            )
+
+        if (delta_eff is None) != (epsilon is None):
+            raise ValueError("delta_eff and epsilon must both be provided or both omitted")
+
+        window_compliant: Optional[bool] = None
+        delta_star: Optional[int] = None
+        if delta_eff is not None and epsilon is not None:
+            decision = verify_confirmation_window(delta_eff=delta_eff, epsilon=epsilon)
+            window_compliant = decision.compliant
+            delta_star = decision.delta_star_blocks
+            if not decision.compliant:
+                return DualCommitXORVerificationResult(
+                    valid=False,
+                    anchor_matched=False,
+                    xor_commit_matched=False,
+                    rotated_anchor=None,
+                    total_cycle_bytes=total_bytes,
+                    window_compliant=False,
+                    delta_star_blocks=delta_star,
+                    reason=decision.rationale,
+                )
+
+        x = reveal_tx.revealed_secret_x
+        y_prime = reveal_tx.next_anchor_y_prime
+
+        if self.track_replay and x in self._spent_secrets:
+            return DualCommitXORVerificationResult(
+                valid=False,
+                anchor_matched=False,
+                xor_commit_matched=False,
+                rotated_anchor=None,
+                total_cycle_bytes=total_bytes,
+                window_compliant=window_compliant,
+                delta_star_blocks=delta_star,
+                reason="Replay detected: ephemeral preimage x already consumed",
+            )
+
+        if hmac.compare_digest(y_prime, anchor_y):
+            return DualCommitXORVerificationResult(
+                valid=False,
+                anchor_matched=False,
+                xor_commit_matched=False,
+                rotated_anchor=None,
+                total_cycle_bytes=total_bytes,
+                window_compliant=window_compliant,
+                delta_star_blocks=delta_star,
+                reason="Key rotation failure: y' must not reuse current anchor y",
+            )
+
+        h_x = self.hash_digest(x)
+        anchor_ok = hmac.compare_digest(h_x, anchor_y)
+        if not anchor_ok:
+            return DualCommitXORVerificationResult(
+                valid=False,
+                anchor_matched=False,
+                xor_commit_matched=False,
+                rotated_anchor=None,
+                total_cycle_bytes=total_bytes,
+                window_compliant=window_compliant,
+                delta_star_blocks=delta_star,
+                reason="Anchor preimage mismatch: H(x) != y",
+            )
+
+        h_xm = self.hash_digest(x + message)
+        expected_c = _xor_32(h_x, h_xm)
+        xor_ok = hmac.compare_digest(expected_c, commit_tx.commitment)
+        if not xor_ok:
+            return DualCommitXORVerificationResult(
+                valid=False,
+                anchor_matched=True,
+                xor_commit_matched=False,
+                rotated_anchor=None,
+                total_cycle_bytes=total_bytes,
+                window_compliant=window_compliant,
+                delta_star_blocks=delta_star,
+                reason="Dual-Commit XOR mismatch: H(x) XOR H(x || m) != C (tampering detected)",
+            )
+
+        if self.track_replay:
+            self._spent_secrets.add(x)
+
+        return DualCommitXORVerificationResult(
+            valid=True,
+            anchor_matched=True,
+            xor_commit_matched=True,
+            rotated_anchor=y_prime,
+            total_cycle_bytes=total_bytes,
+            window_compliant=window_compliant,
+            delta_star_blocks=delta_star,
+            reason="Dual-Commit XOR verified and ephemeral anchor rotated y -> y'",
+        )
+
+
+def compute_network_replication_cost(
+    n_tx: int, m_nodes: int = DEFAULT_NETWORK_NODES
+) -> Dict[str, float]:
+    """Model B network-wide replication footprint for Dual-Commit XOR vs baselines."""
+    if n_tx < 1 or m_nodes < 1:
+        raise ValueError("n_tx and m_nodes must be positive integers")
+
+    dual_blk = n_tx * DUAL_COMMIT_CYCLE_BYTES
+    ecdsa_blk = n_tx * DUAL_COMMIT_CYCLE_BYTES
+    forsc_blk = n_tx * FORS_C_CYCLE_BYTES
+    mldsa_blk = n_tx * MLDSA65_CYCLE_BYTES
+
+    dual_net = dual_blk * m_nodes
+    ecdsa_net = ecdsa_blk * m_nodes
+    forsc_net = forsc_blk * m_nodes
+    mldsa_net = mldsa_blk * m_nodes
+
+    return {
+        "n_tx": n_tx,
+        "m_nodes": m_nodes,
+        "per_tx_bytes": DUAL_COMMIT_CYCLE_BYTES,
+        "dual_commit_block_bytes": dual_blk,
+        "dual_commit_net_bytes": dual_net,
+        "dual_commit_net_mb": dual_net / 1_000_000.0,
+        "dual_commit_net_mib": dual_net / float(1024 ** 2),
+        "ecdsa_net_mb": ecdsa_net / 1_000_000.0,
+        "fors_c_net_mb": forsc_net / 1_000_000.0,
+        "mldsa65_net_mb": mldsa_net / 1_000_000.0,
+        "savings_vs_fors_c_pct": (1.0 - dual_net / forsc_net) * 100.0,
+        "savings_vs_mldsa65_pct": (1.0 - dual_net / mldsa_net) * 100.0,
+        "parity_with_ecdsa": dual_blk == ecdsa_blk,
+    }

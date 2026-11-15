@@ -19,12 +19,18 @@ import hashlib
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from aqmp.algorithms import ECDSA_secp256k1, FALCON512, MLDSA44, MLDSA65
+from apse.engine import AdaptiveParameterSelectionEngine
 from benchmarks.suite import BenchmarkSuite
 from dcl.dual_commit import (
-    DCLWallet, DCLVerifier, AQMPPhase, DCLCommitment, ZKPointer
+    DCLWallet, DCLVerifier, AQMPPhase, DCLCommitment, ZKPointer,
+    DualCommitXORVerifier, compute_network_replication_cost,
 )
-from zk_agg.aggregator import ZKAggregator, analyze_compression_at_scale
-from oracle.threat_oracle import QuantumThreatOracle, ThreatIndicator
+from zk_agg.aggregator import (
+    ZKAggregator, analyze_compression_at_scale, analyze_compression_at_scale_v2
+)
+from oracle.threat_oracle import (
+    QuantumThreatOracle, ThreatIndicator, compute_fukuda_deadline, verify_confirmation_window
+)
 
 
 def separator(title=""):
@@ -200,48 +206,47 @@ def demo_threat_oracle():
 
 
 def compute_trilemma_scores():
-    separator("TRILEMMA SCORE COMPUTATION")
-    
-    strategies = {
-        "Hard Fork Migration": {
-            "Security": 95, "Performance": 55, "Compatibility": 20
-        },
-        "Soft Fork Hybrid": {
-            "Security": 80, "Performance": 65, "Compatibility": 75
-        },
-        "Layered Address Migration": {
-            "Security": 85, "Performance": 72, "Compatibility": 82
-        },
-        "AQMP (This Paper)": {
-            "Security": 93, "Performance": 87, "Compatibility": 91
-        },
-    }
-    
-    print(f"\n{'Strategy':<28} {'Security':>10} {'Performance':>12} {'Compatibility':>14} {'Composite':>11}")
-    print("─" * 78)
-    
-    for name, scores in strategies.items():
-        composite = sum(scores.values()) / 3
-        breaks = composite >= 85 and all(v >= 85 for v in scores.values())
-        marker = " ← TRILEMMA BROKEN ✦" if breaks else ""
+    """AQMP v2.0 Formal Mathematical Trilemma Verification (replaces v1.0 heuristic scores)."""
+    separator("AQMP v2.0 FORMAL MATHEMATICAL MODELS")
+
+    engine = AdaptiveParameterSelectionEngine()
+    print("\n1. APSE v2.0 Break-Even Thresholds & Payload Scaling:")
+    print(f"   {'N':>6} {'Layer':>6} {'Plonky3':>9} {'Mode':<34} {'Payload(B)':>12} {'ECDSA(B)':>10} {'ML-DSA-65(B)':>14}")
+    print("   " + "─" * 96)
+    for n, layer, p3 in [
+        (1, "EL", True),
+        (6, "EL", True),
+        (80, "EL", False),
+        (81, "EL", False),
+        (110, "CL", False),
+        (111, "CL", False),
+        (250, "EL", True),
+    ]:
+        sel = engine.select_mode(n_tx=n, layer=layer, plonky3_active=p3)
         print(
-            f"{name:<28}"
-            f"{scores['Security']:>9}%"
-            f"{scores['Performance']:>11}%"
-            f"{scores['Compatibility']:>13}%"
-            f"{composite:>10.1f}%"
-            f"{marker}"
+            f"   {n:>6} {layer:>6} {str(p3):>9} {sel.mode.value:<34} "
+            f"{sel.payload_bytes:>12,} {sel.ecdsa_baseline_bytes:>10,} {sel.mldsa65_baseline_bytes:>14,}"
         )
 
-    print("\n  Formal proof: AQMP is the first strategy where ALL dimensions ≥ 85%")
-    print("  This satisfies the Trilemma Resolution Theorem (Section 4 of paper).")
+    net_250 = compute_network_replication_cost(n_tx=250, m_nodes=15_000)
+    print("\n2. Temporal Decoupling Dual-Commit XOR (96 B/tx = ECDSA Parity):")
+    print(
+        f"   At N=250, M=15,000 nodes: Dual-Commit XOR = {net_250['dual_commit_net_mb']:.2f} MB "
+        f"(vs FORS+C {net_250['fors_c_net_mb']:,.2f} MB, ML-DSA-65 {net_250['mldsa65_net_mb']:,.2f} MB)"
+    )
+
+    print("\n3. Formal Quantum Threat Oracle — Fukuda Migration Deadline Delta* = ceil(4/(1-eps)):")
+    for eps in [0.10, 0.25, 0.50, 0.75, 0.90]:
+        d_star = compute_fukuda_deadline(eps)
+        decision = verify_confirmation_window(delta_eff=d_star, epsilon=eps)
+        print(f"   eps = {eps:.2f} -> Delta* = {d_star:>2} blocks ({decision.status})")
 
 
 if __name__ == "__main__":
     print("\n" + "═"*65)
-    print("  AQMP — Adaptive Quantum Migration Protocol")
-    print("  Full Integration Demo & Paper Data Generator")
-    print("  Version 1.0.0 | 2025")
+    print("  AQMP v2.0 — Adaptive Quantum Migration Protocol")
+    print("  Full Integration Demo & Formal Mathematical Models")
+    print("  Version 2.0.0 | 2026")
     print("═"*65)
 
     # Run all demos

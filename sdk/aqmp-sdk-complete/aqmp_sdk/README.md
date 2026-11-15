@@ -40,16 +40,17 @@ AQMP breaks the trilemma through **Temporal Decoupling** — separating the upgr
 | **Adaptive Param Selection (APSE)** | Algorithm tier by tx value/risk | Performance |
 | **Quantum Threat Oracle (QTO)** | Dynamic migration urgency control | Security |
 
-**AQMP Benchmark Results** (measured, not estimated):
+**AQMP v2.0 Empirical Mathematical Guarantees** (formal byte-footprint & consensus equations):
 
-| Strategy | Security | Performance | Compatibility | Composite |
-|----------|----------|-------------|---------------|-----------|
-| Hard Fork | 95% | 55% | 20% | 57% |
-| Soft Fork Hybrid | 80% | 65% | 75% | 73% |
-| Layered Address | 85% | 72% | 82% | 80% |
-| **AQMP** | **93%** | **87%** | **91%** | **90% ✦** |
+| Protocol / Strategy | Break-Even ($N^*$) | Payload @ $N=250$ | Network Cost ($15\text{k}$ nodes) | Liveness / Finality Guarantee |
+|---------------------|--------------------|-------------------|------------------------------------|-------------------------------|
+| Classical ECDSA Baseline | — | $24,000\text{ B}$ ($96\text{ B/tx}$) | $360.00\text{ MB}$ | Quantum-vulnerable ($\epsilon$-broken) |
+| Naive ML-DSA-65 | — | $1,315,250\text{ B}$ ($5,261\text{ B/tx}$) | $19,728.75\text{ MB}$ | Post-quantum (no aggregation) |
+| LaBRADOR Indexed Fallback (EL / CL) | $N^*_{\text{EL}}=81$, $N^*_{\text{CL}}=111$ | $63,219\text{ B}$ (EL) / $82,680\text{ B}$ (CL) | — | $a_{N,\text{EL}} + 44N$ / $71,680 + 44N$ |
+| **AQMP v2.0 (Plonky3 + `KeyRegistry`)** | **$N^*_{\text{ECDSA}} = 6$ tx/block** | **$11,300\text{ B}$ ($300 + 44N$)** | — | **$-99.14\%$ vs ML-DSA-65, $-52.9\%$ vs ECDSA** |
+| **AQMP v2.0 Dual-Commit XOR** | **$N = 1$ (exact ECDSA parity)** | **$24,000\text{ B}$ ($32\text{ B} + 64\text{ B}$)** | **$360.00\text{ MB}$** | **$\Delta_{\text{eff}} \ge \Delta^* = \lceil 4/(1-\epsilon)\rceil$** |
 
-✦ First strategy where all dimensions ≥ 85% — trilemma formally broken.
+✦ **Fukuda Threat Oracle Deadlines:** $\Delta^* \in \{5, 6, 8, 16, 40\}$ blocks for adversarial quantum advantage $\epsilon \in \{0.10, 0.25, 0.50, 0.75, 0.90\}$.
 
 ---
 

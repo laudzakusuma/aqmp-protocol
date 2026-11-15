@@ -20,11 +20,14 @@
 #   - Intelligence community threat assessments (public)
 
 from __future__ import annotations
+from decimal import Decimal
+from fractions import Fraction
 import hashlib
 import json
+import math
 import time
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Union
 from enum import IntEnum
 from datetime import datetime
 
@@ -82,6 +85,90 @@ class MigrationRecommendation:
     urgency_score: int
     time_window_days: Optional[int]
     rationale: str
+
+
+class FukudaLivenessViolationError(ValueError):
+    """Raised when an effective commit-reveal window violates Fukuda's bound."""
+
+
+@dataclass(frozen=True)
+class FukudaWindowDecision:
+    """Formal confirmation-window compliance result under Fukuda's inequality."""
+
+    epsilon: float
+    delta_star_blocks: int
+    delta_eff_blocks: int
+    compliant: bool
+    margin_blocks: int
+    exact_bound: float
+    status: str
+    rationale: str
+
+
+def compute_fukuda_deadline(epsilon: Union[float, int, Decimal, Fraction]) -> int:
+    """Compute Fukuda's minimum confirmation window Delta*(eps) = ceil(4 / (1 - eps)).
+
+    Uses exact rational arithmetic (Fraction) so decimal step boundaries such as
+    eps in {0.50, 0.75, 0.80, 0.90} never suffer IEEE-754 off-by-one ceiling errors.
+    """
+    if isinstance(epsilon, bool):
+        raise ValueError("epsilon cannot be a boolean")
+    if isinstance(epsilon, Fraction):
+        eps_frac = epsilon
+    elif isinstance(epsilon, Decimal):
+        if not epsilon.is_finite():
+            raise ValueError(f"epsilon must be finite, got {epsilon!r}")
+        eps_frac = Fraction(epsilon)
+    elif isinstance(epsilon, (int, float)):
+        if math.isnan(epsilon) or math.isinf(epsilon):
+            raise ValueError(f"epsilon must be finite, got {epsilon!r}")
+        eps_frac = Fraction(str(epsilon))
+    else:
+        raise TypeError(f"Unsupported epsilon type: {type(epsilon).__name__}")
+
+    if eps_frac <= 0 or eps_frac >= 1:
+        raise ValueError(f"epsilon must lie strictly in (0, 1), got {epsilon!r}")
+
+    return math.ceil(Fraction(4, 1) / (Fraction(1, 1) - eps_frac))
+
+
+def verify_confirmation_window(
+    delta_eff: int, epsilon: Union[float, Decimal, Fraction]
+) -> FukudaWindowDecision:
+    """Evaluate whether delta_eff >= Delta*(epsilon) = ceil(4 / (1 - epsilon))."""
+    if isinstance(delta_eff, bool) or not isinstance(delta_eff, int) or delta_eff < 0:
+        raise ValueError(f"delta_eff must be a non-negative integer, got {delta_eff!r}")
+
+    delta_star = compute_fukuda_deadline(epsilon)
+    eps_float = float(epsilon)
+    exact_bound = 4.0 / (1.0 - eps_float)
+    compliant = delta_eff >= delta_star
+    margin = delta_eff - delta_star
+    status = "SAFE" if compliant else "VULNERABLE"
+    rationale = (
+        f"Confirmation window Delta_eff={delta_eff} {'satisfies' if compliant else 'violates'} "
+        f"Fukuda bound Delta*(eps={eps_float:.2f}) = ceil(4/(1-{eps_float:.2f})) = {delta_star} blocks"
+    )
+    return FukudaWindowDecision(
+        epsilon=eps_float,
+        delta_star_blocks=delta_star,
+        delta_eff_blocks=delta_eff,
+        compliant=compliant,
+        margin_blocks=margin,
+        exact_bound=exact_bound,
+        status=status,
+        rationale=rationale,
+    )
+
+
+def enforce_finality_window(
+    delta_eff: int, epsilon: Union[float, Decimal, Fraction]
+) -> FukudaWindowDecision:
+    """Enforce Delta_eff >= Delta*(epsilon) before finalizing high-value state transitions."""
+    decision = verify_confirmation_window(delta_eff=delta_eff, epsilon=epsilon)
+    if not decision.compliant:
+        raise FukudaLivenessViolationError(decision.rationale)
+    return decision
 
 
 class QuantumThreatOracle:
@@ -320,3 +407,28 @@ class QuantumThreatOracle:
         lines.append(f"{'='*65}")
 
         return "\n".join(lines)
+
+    @staticmethod
+    def compute_fukuda_deadline(epsilon: Union[float, int, Decimal, Fraction]) -> int:
+        """Compute Delta*(epsilon) = ceil(4 / (1 - epsilon))."""
+        return compute_fukuda_deadline(epsilon)
+
+    @staticmethod
+    def verify_confirmation_window(
+        delta_eff: int, epsilon: Union[float, Decimal, Fraction]
+    ) -> FukudaWindowDecision:
+        """Check whether Delta_eff >= Delta*(epsilon)."""
+        return verify_confirmation_window(delta_eff=delta_eff, epsilon=epsilon)
+
+    @staticmethod
+    def enforce_finality_window(
+        delta_eff: int, epsilon: Union[float, Decimal, Fraction]
+    ) -> FukudaWindowDecision:
+        """Enforce Delta_eff >= Delta*(epsilon), raising FukudaLivenessViolationError on violation."""
+        return enforce_finality_window(delta_eff=delta_eff, epsilon=epsilon)
+
+    def estimate_epsilon_from_threat(self, current_year: Optional[int] = None) -> float:
+        """Map oracle combined threat score in [0, 100] to adversarial epsilon in [0.01, 0.95]."""
+        _, assessment = self.assess_threat_level(current_year)
+        eps = max(0.01, min(0.95, round(assessment["combined_score"] / 100.0, 2)))
+        return eps

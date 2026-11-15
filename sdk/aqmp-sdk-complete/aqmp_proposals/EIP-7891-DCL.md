@@ -1,34 +1,43 @@
 ---
 eip: 7891
-title: Dual-Commit Layer (DCL) for Post-Quantum Transaction Authentication
+title: Dual-Commit Layer (DCL) & APSE v2.0 Post-Quantum Transaction Authentication
 description: >
-  A soft-fork mechanism embedding a quantum-safe commitment alongside classical
-  ECDSA transactions, enabling backward-compatible post-quantum migration
-  without a hard fork.
+  A soft-fork mechanism combining 96-byte Dual-Commit XOR temporal decoupling,
+  APSE v2.0 deterministic ZK-aggregation (Plonky3 BabyBear & LaBRADOR fallback),
+  KeyRegistry 4B indexing, and Fukuda oracle finality bounds.
 author: >
-  AQMP Research Team (@aqmp-protocol),
-  [Your Name] <your@email.com>
+  Laudza Kusuma <laudza@aqmp.protocol>,
+  AQMP Research Team (@aqmp-protocol)
 discussions-to: https://ethereum-magicians.org/t/eip-7891-dual-commit-layer-pqc/
-status: Draft
+status: Draft (v2.0)
 type: Standards Track
 category: Core
 created: 2025-01-15
+updated: 2026-11-15
 requires: 2718, 4337
 ---
 
 ## Abstract
 
-This EIP proposes the **Dual-Commit Layer (DCL)**, a transaction structure
-extension that embeds a post-quantum cryptographic (PQC) commitment alongside
-the existing ECDSA signature in every Ethereum transaction. The DCL enables
-quantum-safe authentication to be introduced via a soft-fork — preserving full
-backward compatibility with all existing wallets, DApps, and infrastructure —
-while providing a cryptographically binding migration path to full PQC
-authentication as standardized by NIST in FIPS 203/204/205 (2024).
+This EIP proposes **EIP-7891 v2.0 (Dual-Commit Layer + APSE v2.0)**, an upgrade
+to Ethereum's post-quantum transaction authentication combining:
 
-DCL resolves two of the three axes of the **PQC Blockchain Migration Trilemma**
-(Security and Compatibility) in isolation, and when combined with
-EIP-7891-ZK (ZK aggregation extension, forthcoming), resolves all three.
+1. **96-byte Dual-Commit XOR** ($C = F(x) \oplus F(x \parallel m)$ in Commit Tx1 [$32\text{ B}$],
+   reveal $x$ + rotate $y' = F(x')$ in Reveal Tx2 [$64\text{ B}$]) achieving exact bandwidth parity
+   with Classical ECDSA ($96\text{ B/tx}$, $360.00\text{ MB}$ across $15{,}000$ nodes at $N=250$)
+   versus ERC-4337 ephemeral FORS+C ($2{,}356\text{ B/tx}$, $8{,}835.00\text{ MB}$).
+2. **4-byte `KeyRegistry` Account Indexing**, compressing FALCON-512 public keys
+   ($p = 897\text{ B}$) to `idx = 4 B`, yielding $44\text{ B/tx}$ per-transaction witness
+   ($R = 40\text{ B}$ salt + $\text{idx} = 4\text{ B}$).
+3. **Plonky3 Two-Stage STARK-to-SNARK Recursion** over the 31-bit **BabyBear** field
+   ($p = 2^{31} - 2^{27} + 1$) with Poseidon2 hashing, producing a **$300\text{ B}$ constant
+   proof** within an **$810\text{ ms}$ proving budget** ($\text{Payload} = 300 + 44N\text{ B}$),
+   beating Classical ECDSA at $N^*_{\text{ECDSA}} = 6\text{ tx/block}$ ($11{,}300\text{ B}$ vs.
+   $24{,}000\text{ B}$ at $N = 250$).
+4. **APSE v2.0 Deterministic LaBRADOR Fallback**, keeping blocks in FALCON-512 Key-Recovery
+   ($690N\text{ B}$) below $N^*_{\text{EL}} = 81$ (EL) or $N^*_{\text{CL}} = 111$ (CL) and
+   switching dynamically to indexed LaBRADOR aggregation at and above those break-even thresholds.
+5. **Fukuda Quantum Threat Oracle Window** ($\Delta_{\text{eff}} \ge \Delta^* = \lceil 4/(1 - \epsilon) \rceil$).
 
 ## Motivation
 
@@ -185,6 +194,40 @@ Note: PQC commitment verification gas (50,000) is comparable to an ECDSA
 `ecrecover` precompile call (~3,000 gas) scaled to include the off-chain
 signature retrieval and SHA3-256 computation. In Phase 2 with ZK aggregation,
 batch verification amortizes this cost to ~500 gas per transaction.
+
+### APSE v2.0 Deterministic State-Switching & `KeyRegistry` Specification
+
+Execution Layer (EL) and Consensus Layer (CL) block builders run APSE v2.0 using
+a `KeyRegistry` precompile mapping registered FALCON-512 public keys ($p = 897\text{ B}$)
+to 4-byte `uint32` indices (`idx = 4 B`), reducing per-transaction metadata to
+$R + \text{idx} = 40 + 4 = 44\text{ B}$:
+
+1. **Primary Mode (`Plonky3_Indexed_Aggregation`):** When Plonky3 two-stage
+   STARK-to-SNARK recursion over the BabyBear field ($p = 2^{31} - 2^{27} + 1$)
+   completes within the **$810\text{ ms}$** hardware proving budget and $N \ge 1$:
+   $$\text{Payload}_{\text{Plonky3}}(N) = 300 + 44N \text{ bytes}$$
+   - Break-even vs. FALCON Key-Recovery ($690N\text{ B}$): $N^*_{\text{Plonky3}} = 1$.
+   - Break-even vs. Classical ECDSA ($96N\text{ B}$): **$N^*_{\text{ECDSA}} = 6$ tx/block** ($564\text{ B} < 576\text{ B}$).
+   - At $N = 250$: **$11{,}300\text{ B}$** ($11.04\text{ KiB}$) vs. $24{,}000\text{ B}$ ECDSA ($-52.9\%$) and $1{,}315{,}250\text{ B}$ ML-DSA-65 ($-99.14\%$).
+2. **LaBRADOR Fallback Mode:** If Plonky3 is disabled or proving latency exceeds $810\text{ ms}$:
+   - **Execution Layer (`EL`):** $a_{N,\text{EL}} = 51{,}200 + \lfloor 128 \log_2(\max(N, 2)) \rfloor$ bytes.
+     Stay in `FALCON_KeyRecovery_Unaggregated` ($690N\text{ B}$) for $N < 81$;
+     switch to `LaBRADOR_Indexed_Aggregation` ($a_{N,\text{EL}} + 44N\text{ B}$) for **$N \ge N^*_{\text{EL}} = 81$**.
+   - **Consensus Layer (`CL`):** Fixed $70\text{ KiB} = 71{,}680\text{ B}$ overhead.
+     Stay in `FALCON_KeyRecovery_Unaggregated` ($690N\text{ B}$) for $N < 111$;
+     switch to `LaBRADOR_Indexed_Aggregation` ($71{,}680 + 44N\text{ B}$) for **$N \ge N^*_{\text{CL}} = 111$**.
+
+### ERC-4337 Ephemeral FORS+C vs. Dual-Commit XOR Key Rotation
+
+For Account Abstraction (`ERC-4337`) Smart Accounts migrating away from ECDSA:
+- **Ephemeral FORS+C ($n=16, K=26, A=5$):** Requires $2{,}336\text{ B}$ signature
+  payload plus a $20\text{ B}$ commitment update ($2{,}356\text{ B/tx}$, replicating
+  $8{,}835.00\text{ MB}$ across $15{,}000$ nodes at $N = 250$).
+- **AQMP v2.0 Dual-Commit XOR:** Requires $32\text{ B}$ Commit Tx1 ($C = F(x) \oplus F(x \parallel m)$)
+  and $64\text{ B}$ Reveal/Rotate Tx2 ($x \parallel y' = F(x')$) totaling **$96\text{ B/tx}$**
+  ($360.00\text{ MB}$ across $15{,}000$ nodes at $N = 250$ — a **$95.93\%$** reduction vs. FORS+C
+  and exact $1.00\times$ parity with Classical ECDSA), gated by Fukuda's confirmation
+  window $\Delta_{\text{eff}} \ge \Delta^* = \lceil 4/(1 - \epsilon) \rceil$.
 
 ### New Precompile: PQC_COMMITMENT_VERIFY (0x0B)
 
