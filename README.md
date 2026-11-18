@@ -1,11 +1,19 @@
 # AQMP v2.0: Adaptive Quantum Migration Protocol
 
 > **Breaking the PQC Blockchain Migration Trilemma**
-> Open-source framework achieving Quantum Security, Performance Parity, and Backward Compatibility via formal byte-footprint equations and QROM proofs.
+> Open-source framework achieving Quantum Security, Performance Parity, and Backward Compatibility across blockchain protocols and quantum repeater networks.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![NIST PQC](https://img.shields.io/badge/NIST%20PQC-FIPS%20203%2F204%2F205-green.svg)](https://csrc.nist.gov/pqc)
+
+## Published Research Trilogy & Zenodo DOIs
+
+**Author:** Laudza Kusuma (Independent Researcher)
+
+1. **Paper #1 (AQMP v2.0 Core Protocol & QROM Proofs):** [https://doi.org/10.5281/zenodo.24303569](https://doi.org/10.5281/zenodo.24303569) (Concept DOI: `10.5281/zenodo.18993494`)
+2. **Paper #2 (Stateless PQ-MPC & 676B Knowledge-Asymmetry UTXO Rescue):** [https://doi.org/10.5281/zenodo.24341314](https://doi.org/10.5281/zenodo.24341314)
+3. **Paper #3 (AQMP-384 Classical Authentication for DI-QKD & Quantum Repeaters):** [https://doi.org/10.5281/zenodo.24343601](https://doi.org/10.5281/zenodo.24343601)
 
 ## The Problem: The PQC Blockchain Migration Trilemma
 
@@ -25,18 +33,20 @@ No single-step migration strategy satisfies all three properties simultaneously:
 - Soft Fork Hybrid: Security + Compatibility, loses Performance
 - Layered Migration: Performance + Compatibility, weakens Security
 
-Formal impossibility bounds and QROM security proofs are documented in [research/aqmp_v2_iacr_paper.tex](research/aqmp_v2_iacr_paper.tex), [research/pqc_trilemma_paper_v2.pdf](research/pqc_trilemma_paper_v2.pdf), and [formal_proofs/AQMP_DualCommit_QROM.ec](formal_proofs/AQMP_DualCommit_QROM.ec).
+Formal impossibility bounds and QROM security proofs are documented in [research/aqmp_v2_iacr_paper.tex](research/aqmp_v2_iacr_paper.tex), [research/pqc_trilemma_paper_v2.pdf](research/pqc_trilemma_paper_v2.pdf), [research/paper2_stateless_mpc_rescue.pdf](research/paper2_stateless_mpc_rescue.pdf), [research/paper3_aqmp_diqkd_repeaters.pdf](research/paper3_aqmp_diqkd_repeaters.pdf), and [formal_proofs/AQMP_DualCommit_QROM.ec](formal_proofs/AQMP_DualCommit_QROM.ec).
 
 ## The Solution: AQMP v2.0
 
-AQMP v2.0 separates upgrade timelines through **Temporal Decoupling** across four components:
+AQMP v2.0 separates upgrade timelines through **Temporal Decoupling** across six core modules:
 
-| Component | Function | Trilemma Axis |
-|-----------|----------|---------------|
-| **Dual-Commit Layer (DCL & XOR)** | 96 B/tx commit-reveal-rotate cycle with ECDSA parity | Compatibility |
-| **ZK-Aggregated Proofs** | N FALCON-512 sigs folded into a 300 B Plonky3 BabyBear proof | Performance |
-| **APSE v2.0 Engine** | Deterministic Plonky3 / LaBRADOR switching at $N^*_{\text{EL}}=81$, $N^*_{\text{CL}}=111$ | Performance |
-| **Quantum Threat Oracle (QTO)** | Enforces Fukuda migration deadline $\Delta^* = \lceil 4/(1 - \epsilon) \rceil$ | Security |
+| Component | Function | Research Scope |
+|-----------|----------|----------------|
+| **Dual-Commit Layer (DCL & XOR)** | 96 B/tx (256-bit) & 144 B (384-bit) commit-reveal-rotate cycle | Compatibility & QROM |
+| **APSE v2.0 & Plonky3 BabyBear** | Deterministic switching at $N^*_{\text{EL}}=81$, $N^*_{\text{CL}}=111$, $N^*_{\text{ECDSA}}=6$ | Execution Performance |
+| **Quantum Threat Oracle (QTO)** | Enforces Fukuda migration deadline $\Delta^* = \lceil 4/(1 - \epsilon) \rceil$ | Consensus Liveness |
+| **Stateless PQ-MPC Custody** | Zero-counter $t$-of-$n$ lattice threshold signatures safe across backup restores | Multi-Zone Custody |
+| **Knowledge-Asymmetry Rescue** | 580 B BIP-32 chain-code proof + 96 B DCL (`676 B` total, zero plaintext pubkey) | Legacy UTXO Rescue |
+| **DI-QKD Repeater Auth** | 144 B AQMP-384 channel authentication (`187.00-bit` QROM, `S = 2.669` at 200 km) | Quantum Repeaters |
 
 ### Empirical Mathematical Guarantees
 
@@ -58,18 +68,6 @@ pytest -v
 python formal_proofs/qrom_reduction_verifier.py
 ```
 
-### Run APSE v2.0 and Dual-Commit XOR
-
-```python
-from sdk.aqmp_sdk_complete.aqmp_sdk.apse.engine import AdaptiveParameterSelectionEngine
-from sdk.aqmp_sdk_complete.aqmp_sdk.oracle.threat_oracle import compute_fukuda_deadline
-
-apse = AdaptiveParameterSelectionEngine()
-res = apse.select_mode(n_tx=250, layer="EL", plonky3_active=True, proving_time_ms=420.0)
-print(res.mode, res.payload_bytes)  # AggregationMode.PLONKY3_INDEXED_AGGREGATION, 11300
-print("Delta*(0.50) =", compute_fukuda_deadline(0.50))  # 8 blocks
-```
-
 ## Repository Structure
 
 ```
@@ -79,41 +77,33 @@ aqmp-protocol/
 │   ├── qrom_reduction_verifier.py    # Concrete QROM bound verifier & game-hop sim
 │   └── qrom_concrete_bounds.csv      # Bounds across q_F in [2^20, 2^64]
 ├── research/
-│   ├── aqmp_v2_iacr_paper.tex        # IEEE/IACR LaTeX manuscript
-│   ├── pqc_trilemma_paper_v2.docx    # Formatted Word manuscript with figures
-│   ├── pqc_trilemma_paper_v2.pdf     # Exported PDF manuscript
-│   ├── data/                         # Model A/B/C empirical CSV datasets
-│   └── figures/                      # 300 DPI publication PNG plots
+│   ├── aqmp_v2_iacr_paper.tex        # Paper #1 LaTeX manuscript
+│   ├── pqc_trilemma_paper_v2.pdf     # Paper #1 PDF (Zenodo 24303569)
+│   ├── paper2_stateless_mpc_rescue.tex / .docx / .pdf  # Paper #2 (Zenodo 24341314)
+│   ├── paper3_aqmp_diqkd_repeaters.tex / .docx / .pdf  # Paper #3 (Zenodo 24343601)
+│   ├── data/                         # Paper #1-#3 empirical CSV datasets
+│   └── figures/                      # 300 DPI publication PNG plots (fig1 to fig7)
 └── sdk/aqmp-sdk-complete/
     ├── aqmp_proposals/               # BIP-XXX-AQMP-BTC.md & EIP-7891-DCL.md
     └── aqmp_sdk/
         ├── apse/engine.py            # APSE v2.0 break-even switching engine
         ├── dcl/dual_commit.py        # DCL & 96 B/tx Dual-Commit XOR verifier
+        ├── mpc/stateless_pq_mpc.py   # Paper #2: Stateless t-of-n PQ-MPC engine
+        ├── rescue/utxo_rescue.py     # Paper #2: 580B + 96B frozen UTXO rescue
+        ├── qkd/di_qkd_repeater.py    # Paper #3: DI-QKD & repeater physics + AQMP-384
         ├── oracle/threat_oracle.py   # Quantum Threat Oracle & Fukuda Delta*
         ├── zk_agg/aggregator.py      # ZK aggregation & APSE v2.0 scaling
         ├── zk_circuit/plonky3_babybear_spec.json
-        └── tests/                    # Automated pytest suite (54 tests)
+        └── tests/                    # Automated pytest suite (62 tests)
 ```
-
-## Supported Algorithms
-
-| Algorithm | NIST Level | Sig Size | Basis | AQMP Use |
-|-----------|-----------|----------|-------|----------|
-| ECDSA-secp256k1 | N/A | 64B | ECC (quantum-vulnerable) | Legacy baseline |
-| **FALCON-512** | 1 | 626B std / 650B KR | NTRU Lattice | Primary aggregated auth |
-| **FALCON-1024** | 5 | ~1280B | NTRU Lattice | High-security accounts |
-| **ML-DSA-44** (Dilithium2) | 2 | 2420B | Module-LWE | Standard unaggregated tx |
-| **ML-DSA-65** (Dilithium3) | 3 | 3309B | Module-LWE | High-value tx |
-| **SPHINCS+-128f** | 1 | 17088B | Hash-based | Conservative fallback |
 
 ## Citation
 
 ```bibtex
-@article{kusuma2026aqmp,
-  title={Breaking the Post-Quantum Cryptography Blockchain Migration Trilemma:
-         The Adaptive Quantum Migration Protocol (AQMP v2.0)},
+@article{kusuma2026aqmp_trilogy,
+  title={Adaptive Quantum Migration Protocol (AQMP v2.0) Research Trilogy},
   author={Laudza Kusuma},
-  note={Independent Researcher, Zenodo Record 24303569},
+  note={Independent Researcher, Zenodo DOIs: 10.5281/zenodo.24303569, 10.5281/zenodo.24341314, 10.5281/zenodo.24343601},
   year={2026}
 }
 ```
