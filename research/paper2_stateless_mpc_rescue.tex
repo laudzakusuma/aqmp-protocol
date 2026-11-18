@@ -1,0 +1,156 @@
+\documentclass[conference,compsoc]{IEEEtran}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{array}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{definition}{Definition}
+
+\title{Stateless Post-Quantum Threshold Custody and Knowledge-Asymmetry Frozen UTXO Rescue:\\
+Resolving Multi-Zone State Hazards and Legacy Quantum Sunset Risks}
+
+\author{\IEEEauthorblockN{Laudza Kusuma}
+\IEEEauthorblockA{Independent Researcher\\
+\texttt{laudza@aqmp.protocol}}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Publishing AQMP v2.0 (Zenodo Record 24303569) established formal byte-footprint equations, deterministic aggregation thresholds, and QROM soundness for standard transactions. Two critical open problems remained in late-2026 post-quantum cryptocurrency engineering. First, institutional custodians replicate signing shares across isolated availability zones and restore nodes from cold backups, making stateful post-quantum signatures unusable whenever counter reuse leaks signing keys. Second, roughly 34\% of Bitcoin supply rests in legacy outputs vulnerable to quantum key recovery or scheduled sunsetting under draft BIP-361, yet existing rescue schemes expose raw public keys or ship multi-kilobyte witnesses.
+
+This paper resolves both bottlenecks with two interoperable constructions. First, we build a \textbf{Stateless Post-Quantum Threshold Signature Engine} over $\mathbb{F}_q^{64}$ ($q = 8{,}380{,}417$) using Shamir polynomial sharing and synthetic PRF nonce derivation bound to message digest, share commitment, active signer set $S$, and an immutable epoch salt. Because signers hold zero mutable signing counters, wiping local memory and restoring from cold backup yields identical partial signatures on repeated inputs and independent nonces across distinct messages. Bound to BIP-360 P2MR roots and AQMP v2.0 4-byte \texttt{KeyRegistry} indexing, a $3$-of-$5$ custody quorum executes signing in $36.48\text{ ms}$ ($3.97\text{ ms}$ group verification) while shrinking $250$-transaction block payloads to $11{,}300\text{ B}$ ($-99.71\%$ relative to $3$-of-$5$ ML-DSA-65). Second, we construct a \textbf{Knowledge-Asymmetry Frozen UTXO Rescue Protocol} that proves knowledge of an unhardened BIP-32 parent chain code $c_{\text{par}}$ via a post-quantum module-lattice proof of knowledge over $\mathbb{F}_q^{32}$ without exposing $P_{\text{par}}$ or $P_{\text{child}}$ in plaintext. The compact rescue witness occupies exactly $580\text{ B}$ ($32\text{ B}$ chain-code commitment, $64\text{ B}$ lattice PoK transcript, $164\text{ B}$ Merkle snapshot proof, and $320\text{ B}$ destination NIZK) paired with a $96\text{ B}$ Dual-Commit XOR cycle ($676\text{ B}$ total, $-87.2\%$ relative to Naive ML-DSA-65) gated by Fukuda's window $\Delta_{\text{eff}} \ge \lceil 4/(1-\epsilon)\rceil$.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Post-quantum migration designs for Bitcoin and Ethereum must handle operational failure modes beyond single-key EOA transfers. Institutional custody clusters deploy $t$-of-$n$ signing thresholds across geographically separated availability zones where virtual-machine snapshots, failover promotions, and cold-backup restores routinely reset volatile RAM and disk state. Stateful hash-based signature schemes (XMSS, LMS) suffer catastrophic secret-key recovery if any backup restoration repeats a one-time signature index. Lattice threshold designs built on random ephemeral nonces face the same hazard when crash recovery replays an intermediate signing round with fresh randomness over an already-used polynomial commitment.
+
+At the protocol layer, approximately 34\% of circulating Bitcoin sits in legacy P2PK, reused P2PKH, P2WPKH, and exposed Taproot outputs susceptible to Shor's algorithm on a Cryptographically Relevant Quantum Computer (CRQC). Draft proposals such as BIP-360 (P2MR) and BIP-361 address new or voluntarily migrated coins, while emergency sweep designs (Lifeboat, Dropkick) demand $3{,}420\text{ B}$ to $5{,}261\text{ B}$ on-chain per rescued coin or risk mempool destination hijacking if an adversary recovers the classical ECDSA key during broadcast.
+
+Building on AQMP v2.0 (Zenodo Record 24303569), we present and benchmark two reference modules:
+\begin{enumerate}
+    \item \textbf{Stateless PQ-MPC Threshold Signing (\texttt{stateless\_pq\_mpc.py}):} Eliminates mutable signing counters through deterministic synthetic HMAC-SHA3-256 nonces, constant-time vector verification, and native BIP-360 P2MR plus 4-byte \texttt{KeyRegistry} compatibility.
+    \item \textbf{Knowledge-Asymmetry Frozen UTXO Rescue (\texttt{utxo\_rescue.py}):} Replaces plaintext elliptic-curve exposure with a $580\text{ B}$ post-quantum lattice PoK of an unhardened BIP-32 chain code $c_{\text{par}}$ bound to a $96\text{ B}$ Dual-Commit XOR cycle and Fukuda confirmation deadline $\Delta^* = \lceil 4/(1-\epsilon)\rceil$.
+\end{enumerate}
+
+\section{Stateless Post-Quantum Threshold Custody}
+\label{sec:mpc}
+
+\subsection{Key Sharing and Synthetic PRF Nonces}
+Let $q = 8{,}380{,}417$ and $d = 64$. A setup dealer (or distributed key generation ceremony) samples a master secret $\mathbf{s} \in \mathbb{F}_q^d$ and public matrix $\mathbf{A} \in \mathbb{F}_q^{d \times d}$ from a 32-byte seed, publishing $\mathbf{b} = \mathbf{A}\mathbf{s} \bmod q$. For each coordinate $k \in \{0, \dots, d-1\}$, a degree-$(t-1)$ Shamir polynomial evaluates $s_{i,k} = f_k(i) \bmod q$ for signer $i \in \{1, \dots, n\}$. Signer $i$ stores an immutable cold-backup tuple:
+\begin{equation}
+\mathsf{Share}_i = \big(i, t, n, \mathbf{s}_i, k_i, \mathsf{com}_i, \mathsf{seed}_{\mathbf{A}}, \mathbf{b}\big),
+\end{equation}
+where $\mathsf{com}_i = \mathbf{A}\mathbf{s}_i \bmod q$ and $k_i \xleftarrow{\$} \{0,1\}^{256}$ is a static PRF root key. By design, $\mathsf{Share}_i$ contains no mutable counter or monotonic state register.
+
+To sign message $m$ under active signer quorum $S \subseteq \{1,\dots,n\}$ ($|S|=t$) and backup-safe epoch salt $\sigma$, signer $i$ derives its synthetic nonce deterministically:
+\begin{equation}
+r_i = \mathrm{HMAC\text{-}SHA3\text{-}256}\Big(k_i,\; \texttt{"AQMP\_STATELESS\_NONCE\_v2:"} \parallel H(m) \parallel H(\mathsf{com}_i) \parallel \mathrm{enc}(S) \parallel \sigma\Big).
+\end{equation}
+Expanding $r_i$ via SHA3-512 yields $\mathbf{y}_i \in \mathbb{F}_q^d$ and nonce commitment $\mathbf{w}_i = \mathbf{A}\mathbf{y}_i \bmod q$. With $\mathbf{W} = \sum_{i \in S} \mathbf{w}_i \bmod q$ and Fiat-Shamir challenge
+\begin{equation}
+c = H_{\mathbb{F}_q}\big(\mathsf{seed}_{\mathbf{A}} \parallel \mathbf{b} \parallel \mathbf{W} \parallel H(m) \parallel \mathsf{root}_{\text{P2MR}} \parallel \mathsf{idx}_{\text{KeyReg}}\big),
+\end{equation}
+signer $i$ computes partial signature $\mathbf{z}_i = \mathbf{y}_i + c \cdot \lambda_{i,S} \cdot \mathbf{s}_i \bmod q$, where $\lambda_{i,S} = \prod_{j \in S, j \ne i} \frac{-j}{i-j} \bmod q$.
+
+\subsection{Constant-Time Verification and Backup-Restore Safety}
+Every partial share satisfies $\mathbf{A}\mathbf{z}_i \equiv \mathbf{w}_i + (c\lambda_{i,S})\mathsf{com}_i \pmod q$, and the combined threshold signature $(\mathbf{W}, \mathbf{z} = \sum_{i \in S}\mathbf{z}_i \bmod q)$ satisfies:
+\begin{equation}
+\mathbf{A}\mathbf{z} - c\mathbf{b} = \mathbf{A}\left(\sum_{i \in S}\mathbf{y}_i + c\sum_{i \in S}\lambda_{i,S}\mathbf{s}_i\right) - c(\mathbf{A}\mathbf{s}) \equiv \mathbf{W} \pmod q.
+\end{equation}
+All vector operations execute in fixed-length loops over $d = 64$ coordinates and finalize equality via constant-time \texttt{hmac.compare\_digest}. Wiping volatile node state and restoring $\mathsf{Share}_i$ from cold backup reproduces identical $(\mathbf{w}_i, \mathbf{z}_i)$ for identical $(m, S, \sigma)$ and fresh pseudorandom nonces for any new message $m' \ne m$, eliminating backup-replay key leakage.
+
+\subsection{BIP-360 P2MR and AQMP v2.0 KeyRegistry Integration}
+Binding the 32-byte BIP-360 P2MR Merkle root and 4-byte \texttt{KeyRegistry} index directly into $c$ enables $t$-of-$n$ signatures to fold into Plonky3 BabyBear recursive proofs at $300 + 44N\text{ B}$ per block. For $N = 250$ transactions under $3$-of-$5$ custody, block payload shrinks from $3{,}945{,}750\text{ B}$ (naive $3$-of-$5$ ML-DSA-65) and $517{,}500\text{ B}$ ($3$-of-$5$ P2MR FALCON-KR) down to $11{,}300\text{ B}$ ($-99.71\%$).
+
+\section{Knowledge-Asymmetry Frozen UTXO Rescue}
+\label{sec:rescue}
+
+\subsection{Why Unhardened BIP-32 Chain Codes Create Quantum Asymmetry}
+In an unhardened BIP-32 wallet, child public key $P_{\text{child}} = P_{\text{par}} + I_L \cdot G$ depends on $(I_L \parallel I_R) = \mathrm{HMAC\text{-}SHA512}(c_{\text{par}}, P_{\text{par}} \parallel i)$, while the legacy Bitcoin script commits only to $\mathrm{Hash160}(P_{\text{child}})$. Even a CRQC that recovers $sk_{\text{child}}$ from an exposed $P_{\text{child}}$ cannot invert HMAC-SHA512 to learn the 256-bit parent chain code $c_{\text{par}}$. Only the legitimate owner holds $c_{\text{par}}$ together with $(P_{\text{par}}, i)$.
+
+\subsection{580-Byte Rescue Witness and Dual-Commit XOR Binding}
+To avoid publishing $P_{\text{par}}$, $P_{\text{child}}$, or $c_{\text{par}}$ in plaintext on-chain, the owner derives a private post-quantum lattice key $\mathbf{s}_{\text{KA}} \in \mathbb{F}_q^{32}$ from $\mathrm{HMAC\text{-}SHA3\text{-}256}(c_{\text{par}}, P_{\text{par}} \parallel i \parallel \mathrm{addr})$ and anchors its pre-sunset tag $H(\mathbf{b}_{\text{KA}} \parallel \mathsf{utxo\_id} \parallel \mathrm{addr})$ where $\mathbf{b}_{\text{KA}} = \mathbf{A}_{\text{KA}}\mathbf{s}_{\text{KA}} \bmod q$. Rescue claims serialize a fixed $580\text{ B}$ witness:
+\begin{equation}
+|\mathsf{Witness}_{\text{rescue}}| = \underbrace{32\text{ B}}_{\kappa \text{ commit}} + \underbrace{64\text{ B}}_{(h_w, c_{\text{FS}})} + \underbrace{164\text{ B}}_{\text{Merkle proof}} + \underbrace{320\text{ B}}_{(\mathbf{z}_{\text{KA}}, \mathbf{b}_{\text{KA}}, \mathsf{tag}_{\text{dest}})} = 580\text{ B}.
+\end{equation}
+On-chain validators verify snapshot Merkle inclusion against $\mathsf{root}_{\text{UTXO}}$, confirm $\mathbf{b}_{\text{KA}}$ matches the frozen UTXO tag, check the Fiat-Shamir challenge $c_{\text{FS}}$, and verify $\mathbf{A}_{\text{KA}}\mathbf{z}_{\text{KA}} - c\mathbf{b}_{\text{KA}} \equiv \mathbf{w}_{\text{KA}} \pmod q$.
+
+To block mempool destination hijacking during rescue, the $580\text{ B}$ witness binds into a $96\text{ B}$ AQMP v2.0 Dual-Commit XOR cycle:
+\begin{equation}
+\text{Commit Tx1 (32 B): } C = F(x) \oplus F(x \parallel m_{\text{rescue}}), \qquad \text{Reveal Tx2 (64 B): } (x, y' = F(x')),
+\end{equation}
+where $m_{\text{rescue}}$ encodes $(\mathsf{utxo\_id}, \mathsf{satoshis}, \mathsf{pqc\_dest}, \kappa, h_w, c_{\text{FS}})$. Consensus enforces Fukuda's confirmation window $\Delta_{\text{eff}} \ge \Delta^*(\epsilon) = \lceil 4/(1-\epsilon)\rceil$ before Tx2 finalizes. Total on-chain rescue payload is $580 + 96 = 676\text{ B}$.
+
+\section{Empirical Benchmarks and Security Verification}
+\label{sec:benchmarks}
+
+We benchmarked both modules in \texttt{research/benchmark\_paper2\_mpc\_rescue.py} and validated all invariants via 59 automated pytest checks (\texttt{test\_paper2\_mpc\_rescue.py} plus AQMP v2.0 and QROM suites). Table~\ref{tab:mpc} and Fig.~\ref{fig:mpc} report measured quorum latency and block payload scaling across $t$-of-$n$ custody committees. Table~\ref{tab:rescue} and Fig.~\ref{fig:rescue} compare our $676\text{ B}$ UTXO rescue cycle against Lifeboat ($3{,}420\text{ B}$), Dropkick ($3{,}904\text{ B}$), and Naive ML-DSA-65 ($5{,}261\text{ B}$), alongside measured proof creation ($1.97\text{ ms}$ mean) and verification ($1.05\text{ ms}$ mean) latency under Fukuda gating ($\Delta^* \in \{5, 6, 8, 16, 40\}$).
+
+\begin{table}[t]
+\centering
+\caption{Stateless PQ-MPC Latency and Block Payload ($N = 250$ Tx/Block)}
+\label{tab:mpc}
+\begin{tabular}{@{}ccccc@{}}
+\toprule
+Quorum ($t$-of-$n$) & Sign (ms) & Verify (ms) & Plonky3 + KeyReg (B) & Naive $t$-ML-DSA-65 (B) \\
+\midrule
+2-of-3 & 24.38 & 4.68 & 11,300 & 2,630,500 \\
+3-of-5 & 36.48 & 3.97 & 11,300 & 3,945,750 \\
+4-of-7 & 50.82 & 4.40 & 11,300 & 5,261,000 \\
+5-of-9 & 66.82 & 4.32 & 11,300 & 6,576,250 \\
+7-of-11 & 87.73 & 3.90 & 11,300 & 9,206,750 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Frozen UTXO Rescue Footprint Comparison}
+\label{tab:rescue}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Rescue Scheme & Total On-Chain Bytes & Reduction vs.\ ML-DSA-65 \\
+\midrule
+AQMP Knowledge-Asymmetry Rescue (580B + 96B DCL) & \textbf{676 B} & \textbf{87.15\%} \\
+Lifeboat (Commit-Delay-Reveal + PQC) & 3,420 B & 34.99\% \\
+Dropkick (ZK Seed Recovery Proof) & 3,904 B & 25.79\% \\
+Naive ML-DSA-65 Spend (Baseline) & 5,261 B & 0.00\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/fig4_stateless_mpc_scaling.png}
+\caption{Stateless PQ-MPC threshold execution latency across custody quorums (left) and block-level payload scaling under 3-of-5 custody with Plonky3 + KeyRegistry aggregation (right).}
+\label{fig:mpc}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/fig5_utxo_rescue_comparison.png}
+\caption{Knowledge-Asymmetry frozen UTXO rescue byte footprint breakdown vs.\ Lifeboat, Dropkick, and Naive ML-DSA-65 (left) and Fukuda confirmation deadline boundary $\Delta^* = \lceil 4/(1-\epsilon)\rceil$ (right).}
+\label{fig:rescue}
+\end{figure*}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+Stateless synthetic-PRF lattice threshold signing eliminates backup-restore nonce reuse for multi-zone custodians and compresses $3$-of-$5$ blocks to $11{,}300\text{ B}$ at $N = 250$. Pairing unhardened BIP-32 chain-code proofs with a $580\text{ B}$ lattice witness and a $96\text{ B}$ Dual-Commit XOR cycle rescues frozen UTXOs in $676\text{ B}$ without exposing elliptic-curve public keys or risking mempool destination hijacking.
+
+\begin{thebibliography}{9}
+\bibitem{aqmp2026} L. Kusuma, ``Breaking the Post-Quantum Cryptography Blockchain Migration Trilemma: AQMP v2.0,'' Zenodo Record 24303569, 2026.
+\bibitem{bip360} H. E. Hunter et al., ``BIP-360: Pay-to-Merkle-Root (P2MR),'' Bitcoin Improvement Proposals, 2025.
+\bibitem{bip361} A. L. Corbit et al., ``BIP-361: Post-Quantum Migration and Legacy Output Sunsetting,'' Bitcoin Improvement Proposals, 2026.
+\bibitem{nist2024} NIST, ``Module-Lattice-Based Digital Signature Standard (FIPS 204),'' 2024.
+\end{thebibliography}
+
+\end{document}

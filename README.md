@@ -113,7 +113,7 @@ aqmp-protocol/
   title={Breaking the Post-Quantum Cryptography Blockchain Migration Trilemma:
          The Adaptive Quantum Migration Protocol (AQMP v2.0)},
   author={Laudza Kusuma},
-  institution={Universitas Gunadarma},
+  note={Independent Researcher, Zenodo Record 24303569},
   year={2026}
 }
 ```
