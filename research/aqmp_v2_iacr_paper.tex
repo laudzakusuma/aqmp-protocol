@@ -8,6 +8,7 @@
 \usepackage{hyperref}
 \usepackage{multirow}
 \usepackage{array}
+\usepackage{microtype}
 
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
@@ -25,6 +26,7 @@ The Adaptive Quantum Migration Protocol (AQMP v2.0) with QROM-Verified Temporal 
 }
 
 \begin{document}
+\sloppy
 \maketitle
 
 \begin{abstract}
@@ -92,16 +94,23 @@ For $N$ transactions per block, the cryptographic payload footprints (in bytes) 
 \text{EL}_{\text{Case1}}(N) &= N \cdot (\tilde{S} + R) = 690N, \\
 \text{EL}_{\text{Case2}}(N) &= N \cdot (p + S + R) = 1563N, \\
 a_{N,\text{EL}} &= 51200 + \lfloor 128 \log_2(\max(N, 2)) \rfloor, \\
-\text{EL}_{\text{Case3a}}(N) &= N \cdot (p + R) + a_{N,\text{EL}} = 937N + a_{N,\text{EL}}, \\
-\text{EL}_{\text{Case3b}}(N) &= a_{N,\text{EL}} + N \cdot (R + \text{idx}) = a_{N,\text{EL}} + 44N, \\
-\text{CL}_{\text{Case3}}(N) &= 71680 + N \cdot (R + \text{idx}) = 71680 + 44N.
+\text{EL}_{\text{Case3a}}(N) &= N \cdot (p + R) + a_{N,\text{EL}} \nonumber \\
+  &= 937N + a_{N,\text{EL}}, \\
+\text{EL}_{\text{Case3b}}(N) &= a_{N,\text{EL}} + N \cdot (R + \text{idx}) \nonumber \\
+  &= a_{N,\text{EL}} + 44N, \\
+\text{CL}_{\text{Case3}}(N) &= 71680 + N \cdot (R + \text{idx}) \nonumber \\
+  &= 71680 + 44N.
 \end{align}
 
 \subsection{Two-Stage Plonky3-BabyBear Recursion and APSE Switching}
 To avoid the $50$ to $70\text{ KiB}$ lattice proof overhead of LaBRADOR at moderate block sizes, AQMP v2.0 runs a two-stage STARK-to-SNARK pipeline over the 31-bit \textbf{BabyBear} field ($p = 2^{31} - 2^{27} + 1$) with Poseidon2 hashing. Stage~1 folds $N$ FALCON-512 key-recovery verifications into an inner Plonky3 FRI-STARK, and Stage~2 wraps the verification into a constant $300\text{ B}$ SNARK proof within an $810\text{ ms}$ hardware proving budget:
 \begin{equation}
 \label{eq:plonky3}
-\text{AQMP}_{\text{Plonky3}}(N) = \min\!\Big(690N,\; 300 + 44N\Big) = 300 + 44N \quad (\forall N \ge 1).
+\begin{aligned}
+\text{AQMP}_{\text{Plonky3}}(N)
+  &= \min\!\Big(690N,\; 300 + 44N\Big) \\
+  &= 300 + 44N \qquad (\forall N \ge 1).
+\end{aligned}
 \end{equation}
 
 \begin{theorem}[APSE v2.0 Exact Break-Even Thresholds]
@@ -130,7 +139,7 @@ The full two-phase on-chain footprint is $32 + 64 = 96\text{ B/tx}$, which match
 \section{Formal Security Analysis in the QROM}
 \label{sec:qrom}
 
-We present a self-contained proof of existential unforgeability under chosen-message attacks in the Quantum Random Oracle Model (\textbf{EUF-CMA-QROM}) for the AQMP v2.0 Dual-Commit XOR protocol using Zhandry's compressed oracle technique~\cite{zhandry2019} and the Ambainis, Hamburg, and Unruh One-Way-to-Hiding (O2H) lemma~\cite{ahu2019}. A machine-checkable companion specification is provided in \texttt{formal\_proofs/AQMP\_DualCommit\_QROM.ec}.
+We present a self-contained proof of existential unforgeability under chosen-message attacks in the Quantum Random Oracle Model (\textbf{EUF-CMA-QROM}) for the AQMP v2.0 Dual-Commit XOR protocol using Zhandry's compressed oracle technique~\cite{zhandry2019} and the Ambainis, Hamburg, and Unruh One-Way-to-Hiding (O2H) lemma~\cite{ahu2019}. A machine-checkable companion specification is provided in \texttt{formal\_proofs/\allowbreak AQMP\_DualCommit\_\allowbreak QROM.ec}.
 
 \begin{definition}[EUF-CMA-QROM Experiment for Dual-Commit XOR]
 Let $F : \{0,1\}^* \to \{0,1\}^n$ be a domain-separated quantum random oracle ($F_{\mathrm{PRE}}(x) = F(\texttt{"PRE:"} \parallel x)$ and $F_{\mathrm{MSG}}(x, m) = F(\texttt{"MSG:"} \parallel x \parallel m)$). In experiment $\mathsf{Exp}^{\mathrm{EUF\text{-}CMA\text{-}QROM}}_{\mathrm{AQMP\text{-}v2}}(\mathcal{A})$:
@@ -145,8 +154,10 @@ Let $F : \{0,1\}^* \to \{0,1\}^n$ be a domain-separated quantum random oracle ($
 For any quantum polynomial-time adversary $\mathcal{A}$ making at most $q_F$ superposition queries to $F$ before Reveal Tx2 enters the mempool,
 \begin{equation}
 \label{eq:qrom_bound}
-\mathrm{Adv}^{\mathrm{EUF\text{-}CMA\text{-}QROM}}_{\mathrm{AQMP\text{-}v2}}(\mathcal{A})
-\le \frac{8(q_F + 1)^2}{2^n} + \frac{32 q_F^3}{2^n} + \mathrm{negl}(\lambda).
+\begin{aligned}
+&\mathrm{Adv}^{\mathrm{EUF\text{-}CMA\text{-}QROM}}_{\mathrm{AQMP\text{-}v2}}(\mathcal{A}) \\
+&\quad \le \frac{8(q_F + 1)^2}{2^n} + \frac{32 q_F^3}{2^n} + \mathrm{negl}(\lambda).
+\end{aligned}
 \end{equation}
 \end{theorem}
 
@@ -181,18 +192,21 @@ Conditioned on $\neg \mathsf{Bad}_{\mathrm{O2H}} \wedge \neg \mathsf{Bad}_{\math
 
 \begin{corollary}[Concrete $187.00$-Bit QROM Security at $q_F = 2^{64}$]
 Instantiating $F$ with a $384$-bit domain-separated sponge ($n = 384$, e.g., SHA-384 or SHA3-384) against a quantum adversary budget of $q_F = 2^{64}$ superposition queries gives:
-\begin{align}
-\mathrm{Adv}^{\mathrm{EUF\text{-}CMA\text{-}QROM}}_{n=384}(\mathcal{A})
-&\le \frac{8(2^{64} + 1)^2 + 32(2^{64})^3}{2^{384}} \nonumber \\
-&= \frac{2^{131} + 2^{68} + 8 + 2^{197}}{2^{384}} \approx 2^{-187.00},
-\end{align}
+\begin{equation}
+\begin{aligned}
+&\mathrm{Adv}^{\mathrm{EUF\text{-}CMA\text{-}QROM}}_{n=384}(\mathcal{A}) \\
+&\quad \le \frac{8(2^{64} + 1)^2 + 32(2^{64})^3}{2^{384}} \\
+&\quad = \frac{2^{131} + 2^{68} + 8 + 2^{197}}{2^{384}} \approx 2^{-187.00},
+\end{aligned}
+\end{equation}
 achieving exact $187.00$-bit concrete QROM security even under the unamortized cubic collision bound.
 \end{corollary}
 
-Table~\ref{tab:qrom} reports exact high-precision numerical bounds verified by \texttt{qrom\_reduction\_verifier.py}. For single-epoch budgets $q_F \le 2^{40}$, the combined $n = 256$ bound yields at least $131.00$ bits of post-quantum security ($128.00$ bits at the exact Zhandry crossover $q_F = 2^{41}$), while O2H preimage security remains at least $125.00$ bits up to $q_F = 2^{64}$. Instantiating $F$ with the $384$-bit domain-separated sponge guarantees $187.00$-bit QROM security at $q_F = 2^{64}$.
+Table~\ref{tab:qrom} reports exact high-precision numerical bounds verified by \texttt{qrom\_reduction\_\allowbreak verifier.py}. For single-epoch budgets $q_F \le 2^{40}$, the combined $n = 256$ bound yields at least $131.00$ bits of post-quantum security ($128.00$ bits at the exact Zhandry crossover $q_F = 2^{41}$), while O2H preimage security remains at least $125.00$ bits up to $q_F = 2^{64}$. Instantiating $F$ with the $384$-bit domain-separated sponge guarantees $187.00$-bit QROM security at $q_F = 2^{64}$.
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
+\footnotesize
 \caption{Concrete QROM Security Bits Across Query Budgets $q_F \in [2^{20}, 2^{64}]$}
 \label{tab:qrom}
 \begin{tabular}{@{}ccccc@{}}
@@ -207,12 +221,12 @@ $48$ & $157.00$ & $107.00$ & $107.00$ & $235.00$ \\
 $64$ & $125.00$ & $59.00$  & $59.00$  & $187.00$ \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \section{Empirical Evaluation and Reproducible Benchmarks}
 \label{sec:eval}
 
-We generated all empirical curves, CSV datasets (\texttt{research/data/*.csv}), and 300~DPI figures (\texttt{research/figures/*.png}) deterministically and validated them against the AQMP v2.0 SDK (\texttt{pytest}: $100\%$ pass rate across APSE v2.0, Dual-Commit XOR, Fukuda Oracle, and QROM verification tests).
+We generated all empirical curves, CSV datasets (\texttt{research/\allowbreak data/*.csv}), and 300~DPI figures (\texttt{research/\allowbreak figures/*.png}) deterministically and validated them against the AQMP v2.0 SDK (\texttt{pytest}: $100\%$ pass rate across APSE v2.0, Dual-Commit XOR, Fukuda Oracle, and QROM verification tests).
 
 \begin{figure*}[t]
 \centering
@@ -237,8 +251,9 @@ We generated all empirical curves, CSV datasets (\texttt{research/data/*.csv}), 
 
 Table~\ref{tab:n250} summarizes the exact empirical footprints at $N = 250$ transactions per block (Figs.~\ref{fig:breakeven}, \ref{fig:bandwidth}, and~\ref{fig:oracle}). These measurements confirm that AQMP v2.0 satisfies post-quantum security, execution scalability, and soft-fork compatibility at the same time.
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
+\footnotesize
 \caption{Empirical Payload and Network Bandwidth Comparison at $N = 250$ Tx/Block}
 \label{tab:n250}
 \begin{tabular}{@{}lrrr@{}}
@@ -257,7 +272,7 @@ ERC-4337 FORS+C & $589{,}000$ & $575.20$ & $8{,}835.00$ \\
 Naive ML-DSA-65 & $1{,}315{,}250$ & $1{,}284.42$ & $19{,}728.75$ \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \section{Summary of Contributions}
 \label{sec:summary}

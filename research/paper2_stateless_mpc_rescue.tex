@@ -7,6 +7,7 @@
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{array}
+\usepackage{microtype}
 
 \newtheorem{theorem}{Theorem}
 \newtheorem{definition}{Definition}
@@ -22,6 +23,7 @@ Resolving Multi-Zone State Hazards and Legacy Quantum Sunset Risks}
 }
 
 \begin{document}
+\sloppy
 \maketitle
 
 \begin{abstract}
@@ -39,7 +41,7 @@ At the protocol layer, approximately 34\% of circulating Bitcoin sits in legacy 
 
 Building on AQMP v2.0 (Zenodo Record 24303569), we present and benchmark two reference modules:
 \begin{enumerate}
-    \item \textbf{Stateless PQ-MPC Threshold Signing (\texttt{stateless\_pq\_mpc.py}):} Eliminates mutable signing counters through deterministic synthetic HMAC-SHA3-256 nonces, constant-time vector verification, and native BIP-360 P2MR plus 4-byte \texttt{KeyRegistry} compatibility.
+    \item \textbf{Stateless PQ-MPC Threshold Signing (\texttt{stateless\_pq\_\allowbreak mpc.py}):} Eliminates mutable signing counters through deterministic synthetic HMAC-SHA3-256 nonces, constant-time vector verification, and native BIP-360 P2MR plus 4-byte \texttt{KeyRegistry} compatibility.
     \item \textbf{Knowledge-Asymmetry Frozen UTXO Rescue (\texttt{utxo\_rescue.py}):} Replaces plaintext elliptic-curve exposure with a $580\text{ B}$ post-quantum lattice PoK of an unhardened BIP-32 chain code $c_{\text{par}}$ bound to a $96\text{ B}$ Dual-Commit XOR cycle and Fukuda confirmation deadline $\Delta^* = \lceil 4/(1-\epsilon)\rceil$.
 \end{enumerate}
 
@@ -55,20 +57,31 @@ where $\mathsf{com}_i = \mathbf{A}\mathbf{s}_i \bmod q$ and $k_i \xleftarrow{\$}
 
 To sign message $m$ under active signer quorum $S \subseteq \{1,\dots,n\}$ ($|S|=t$) and backup-safe epoch salt $\sigma$, signer $i$ derives its synthetic nonce deterministically:
 \begin{equation}
-r_i = \mathrm{HMAC\text{-}SHA3\text{-}256}\Big(k_i,\; \texttt{"AQMP\_STATELESS\_NONCE\_v2:"} \parallel H(m) \parallel H(\mathsf{com}_i) \parallel \mathrm{enc}(S) \parallel \sigma\Big).
+\begin{aligned}
+r_i &= \mathrm{HMAC\text{-}SHA3\text{-}256}\Big(k_i, \\
+    &\quad \texttt{"AQMP\_STATELESS\_NONCE\_v2:"} \\
+    &\quad \parallel H(m) \parallel H(\mathsf{com}_i) \parallel \mathrm{enc}(S) \parallel \sigma\Big).
+\end{aligned}
 \end{equation}
 Expanding $r_i$ via SHA3-512 yields $\mathbf{y}_i \in \mathbb{F}_q^d$ and nonce commitment $\mathbf{w}_i = \mathbf{A}\mathbf{y}_i \bmod q$. With $\mathbf{W} = \sum_{i \in S} \mathbf{w}_i \bmod q$ and Fiat-Shamir challenge
 \begin{equation}
-c = H_{\mathbb{F}_q}\big(\mathsf{seed}_{\mathbf{A}} \parallel \mathbf{b} \parallel \mathbf{W} \parallel H(m) \parallel \mathsf{root}_{\text{P2MR}} \parallel \mathsf{idx}_{\text{KeyReg}}\big),
+\begin{aligned}
+c = H_{\mathbb{F}_q}\big(&\mathsf{seed}_{\mathbf{A}} \parallel \mathbf{b} \parallel \mathbf{W} \parallel H(m) \\
+    &\parallel \mathsf{root}_{\text{P2MR}} \parallel \mathsf{idx}_{\text{KeyReg}}\big),
+\end{aligned}
 \end{equation}
 signer $i$ computes partial signature $\mathbf{z}_i = \mathbf{y}_i + c \cdot \lambda_{i,S} \cdot \mathbf{s}_i \bmod q$, where $\lambda_{i,S} = \prod_{j \in S, j \ne i} \frac{-j}{i-j} \bmod q$.
 
 \subsection{Constant-Time Verification and Backup-Restore Safety}
 Every partial share satisfies $\mathbf{A}\mathbf{z}_i \equiv \mathbf{w}_i + (c\lambda_{i,S})\mathsf{com}_i \pmod q$, and the combined threshold signature $(\mathbf{W}, \mathbf{z} = \sum_{i \in S}\mathbf{z}_i \bmod q)$ satisfies:
 \begin{equation}
-\mathbf{A}\mathbf{z} - c\mathbf{b} = \mathbf{A}\left(\sum_{i \in S}\mathbf{y}_i + c\sum_{i \in S}\lambda_{i,S}\mathbf{s}_i\right) - c(\mathbf{A}\mathbf{s}) \equiv \mathbf{W} \pmod q.
+\begin{aligned}
+\mathbf{A}\mathbf{z} - c\mathbf{b}
+  &= \mathbf{A}\!\left(\sum_{i \in S}\mathbf{y}_i + c\sum_{i \in S}\lambda_{i,S}\mathbf{s}_i\right) \\
+  &\quad - c(\mathbf{A}\mathbf{s}) \equiv \mathbf{W} \pmod q.
+\end{aligned}
 \end{equation}
-All vector operations execute in fixed-length loops over $d = 64$ coordinates and finalize equality via constant-time \texttt{hmac.compare\_digest}. Wiping volatile node state and restoring $\mathsf{Share}_i$ from cold backup reproduces identical $(\mathbf{w}_i, \mathbf{z}_i)$ for identical $(m, S, \sigma)$ and fresh pseudorandom nonces for any new message $m' \ne m$, eliminating backup-replay key leakage.
+All vector operations execute in fixed-length loops over $d = 64$ coordinates and finalize equality via constant-time \texttt{hmac.compare\_\allowbreak digest}. Wiping volatile node state and restoring $\mathsf{Share}_i$ from cold backup reproduces identical $(\mathbf{w}_i, \mathbf{z}_i)$ for identical $(m, S, \sigma)$ and fresh pseudorandom nonces for any new message $m' \ne m$, eliminating backup-replay key leakage.
 
 \subsection{BIP-360 P2MR and AQMP v2.0 KeyRegistry Integration}
 Binding the 32-byte BIP-360 P2MR Merkle root and 4-byte \texttt{KeyRegistry} index directly into $c$ enables $t$-of-$n$ signatures to fold into Plonky3 BabyBear recursive proofs at $300 + 44N\text{ B}$ per block. For $N = 250$ transactions under $3$-of-$5$ custody, block payload shrinks from $3{,}945{,}750\text{ B}$ (naive $3$-of-$5$ ML-DSA-65) and $517{,}500\text{ B}$ ($3$-of-$5$ P2MR FALCON-KR) down to $11{,}300\text{ B}$ ($-99.71\%$).
@@ -82,13 +95,23 @@ In an unhardened BIP-32 wallet, child public key $P_{\text{child}} = P_{\text{pa
 \subsection{580-Byte Rescue Witness and Dual-Commit XOR Binding}
 To avoid publishing $P_{\text{par}}$, $P_{\text{child}}$, or $c_{\text{par}}$ in plaintext on-chain, the owner derives a private post-quantum lattice key $\mathbf{s}_{\text{KA}} \in \mathbb{F}_q^{32}$ from $\mathrm{HMAC\text{-}SHA3\text{-}256}(c_{\text{par}}, P_{\text{par}} \parallel i \parallel \mathrm{addr})$ and anchors its pre-sunset tag $H(\mathbf{b}_{\text{KA}} \parallel \mathsf{utxo\_id} \parallel \mathrm{addr})$ where $\mathbf{b}_{\text{KA}} = \mathbf{A}_{\text{KA}}\mathbf{s}_{\text{KA}} \bmod q$. Rescue claims serialize a fixed $580\text{ B}$ witness:
 \begin{equation}
-|\mathsf{Witness}_{\text{rescue}}| = \underbrace{32\text{ B}}_{\kappa \text{ commit}} + \underbrace{64\text{ B}}_{(h_w, c_{\text{FS}})} + \underbrace{164\text{ B}}_{\text{Merkle proof}} + \underbrace{320\text{ B}}_{(\mathbf{z}_{\text{KA}}, \mathbf{b}_{\text{KA}}, \mathsf{tag}_{\text{dest}})} = 580\text{ B}.
+\begin{aligned}
+|\mathsf{Witness}_{\text{rescue}}|
+  &= \underbrace{32\text{ B}}_{\kappa \text{ commit}}
+   + \underbrace{64\text{ B}}_{(h_w, c_{\text{FS}})}
+   + \underbrace{164\text{ B}}_{\text{Merkle proof}} \\
+  &\quad + \underbrace{320\text{ B}}_{(\mathbf{z}_{\text{KA}}, \mathbf{b}_{\text{KA}}, \mathsf{tag}_{\text{dest}})}
+   = 580\text{ B}.
+\end{aligned}
 \end{equation}
 On-chain validators verify snapshot Merkle inclusion against $\mathsf{root}_{\text{UTXO}}$, confirm $\mathbf{b}_{\text{KA}}$ matches the frozen UTXO tag, check the Fiat-Shamir challenge $c_{\text{FS}}$, and verify $\mathbf{A}_{\text{KA}}\mathbf{z}_{\text{KA}} - c\mathbf{b}_{\text{KA}} \equiv \mathbf{w}_{\text{KA}} \pmod q$.
 
 To block mempool destination hijacking during rescue, the $580\text{ B}$ witness binds into a $96\text{ B}$ AQMP v2.0 Dual-Commit XOR cycle:
 \begin{equation}
-\text{Commit Tx1 (32 B): } C = F(x) \oplus F(x \parallel m_{\text{rescue}}), \qquad \text{Reveal Tx2 (64 B): } (x, y' = F(x')),
+\begin{aligned}
+\text{Commit Tx1 (32 B):}\quad & C = F(x) \oplus F(x \parallel m_{\text{rescue}}), \\
+\text{Reveal Tx2 (64 B):}\quad & (x,\; y' = F(x')),
+\end{aligned}
 \end{equation}
 where $m_{\text{rescue}}$ encodes $(\mathsf{utxo\_id}, \mathsf{satoshis}, \mathsf{pqc\_dest}, \kappa, h_w, c_{\text{FS}})$. Consensus enforces Fukuda's confirmation window $\Delta_{\text{eff}} \ge \Delta^*(\epsilon) = \lceil 4/(1-\epsilon)\rceil$ before Tx2 finalizes. Total on-chain rescue payload is $580 + 96 = 676\text{ B}$.
 
@@ -109,8 +132,11 @@ In experiment $\mathsf{Exp}^{\mathrm{Rescue\text{-}QROM}}(\mathcal{A})$, the cha
 \label{thm:mpc}
 Assuming $\mathrm{HMAC\text{-}SHA3\text{-}256}$ is a secure PRF and the underlying module-lattice relation $\mathbf{A}\mathbf{s} \equiv \mathbf{b} \pmod q$ is hard against key recovery, for any adversary $\mathcal{A}$ corrupting at most $t - 1$ signers and making $q_H$ random oracle queries and $q_S$ signing queries (including arbitrary cold-backup resets),
 \begin{equation}
-\mathrm{Adv}^{\mathrm{TS\text{-}UF\text{-}CMA}}_{\Pi_{\mathrm{MPC}}}(\mathcal{A})
-\le (n - t + 1)\,\mathrm{Adv}^{\mathrm{PRF}}_{\mathrm{HMAC}}(\mathcal{B}_{\mathrm{PRF}}) + \sqrt{q_H \cdot \mathrm{Adv}^{\mathrm{MLWE/MSIS}}_{\mathbb{F}_q^d}(\mathcal{B}_{\mathrm{Lat}})} + \frac{q_H + q_S}{q}.
+\begin{aligned}
+&\mathrm{Adv}^{\mathrm{TS\text{-}UF\text{-}CMA}}_{\Pi_{\mathrm{MPC}}}(\mathcal{A}) \\
+  &\quad \le (n - t + 1)\,\mathrm{Adv}^{\mathrm{PRF}}_{\mathrm{HMAC}}(\mathcal{B}_{\mathrm{PRF}}) \\
+  &\qquad + \sqrt{q_H \cdot \mathrm{Adv}^{\mathrm{MLWE/MSIS}}_{\mathbb{F}_q^d}(\mathcal{B}_{\mathrm{Lat}})} + \frac{q_H + q_S}{q}.
+\end{aligned}
 \end{equation}
 \end{theorem}
 
@@ -121,7 +147,11 @@ We transition through three games $G_0 \to G_1 \to G_2$:
 
 \textbf{Game 1 (PRF-to-Random Nonce Table Replacement):} For each honest signer $i \notin \mathcal{C}$, replace $r_i = \mathrm{HMAC\text{-}SHA3\text{-}256}(k_i, \cdot)$ with an internal lazy random function table $T_i[m, \mathsf{com}_i, S, \sigma]$. Repeated queries after $\mathsf{Reset}(i)$ on the same $(m, S, \sigma)$ return the identical cached nonce $\mathbf{y}_i$ (preserving exact backup-restore determinism), while every fresh tuple $(m', S', \sigma')$ receives an independent uniform nonce $\mathbf{y}_i' \xleftarrow{\$} \mathbb{F}_q^d$. By a standard hybrid argument over the $n - |\mathcal{C}| \le n - t + 1$ honest signers,
 \begin{equation}
-|\Pr[G_0] - \Pr[G_1]| \le (n - t + 1)\,\mathrm{Adv}^{\mathrm{PRF}}_{\mathrm{HMAC}}(\mathcal{B}_{\mathrm{PRF}}).
+\begin{aligned}
+|\Pr[G_0] - \Pr[G_1]|
+  &\le (n - t + 1) \\
+  &\quad \cdot \mathrm{Adv}^{\mathrm{PRF}}_{\mathrm{HMAC}}(\mathcal{B}_{\mathrm{PRF}}).
+\end{aligned}
 \end{equation}
 
 \textbf{Game 2 (Zero-Knowledge Simulation and General Forking Lemma):} Given a lattice challenge instance $(\mathbf{A}, \mathbf{b})$, the reduction $\mathcal{B}_{\mathrm{Lat}}$ samples the $|\mathcal{C}| \le t - 1$ corrupted shares $\{\mathbf{s}_j\}_{j \in \mathcal{C}}$ uniformly from $\mathbb{F}_q^d$, which fixes the public commitments $\mathsf{com}_i$ of all honest signers $i \notin \mathcal{C}$ via Lagrange interpolation in the linear exponent using $\mathbf{b}$. On each honest partial signing query, $\mathcal{B}_{\mathrm{Lat}}$ samples $\mathbf{z}_i \xleftarrow{\$} \mathbb{F}_q^d$, programs the Fiat-Shamir challenge $c \xleftarrow{\$} \mathbb{F}_q$ on $(\mathbf{W}, H(m), \mathsf{root}_{\text{P2MR}}, \mathsf{idx}_{\text{KeyReg}})$, and sets $\mathbf{w}_i = \mathbf{A}\mathbf{z}_i - (c\lambda_{i,S})\mathsf{com}_i \bmod q$, aborting only on an accidental oracle collision (probability at most $(q_H + q_S)/q$). By the General Forking Lemma~\cite{bellare2006}, rewinding a successful forger $\mathcal{A}$ on the target query yields two valid forgeries $(\mathbf{W}^*, c_1, \mathbf{z}_1)$ and $(\mathbf{W}^*, c_2, \mathbf{z}_2)$ with $c_1 \ne c_2 \bmod q$ with probability at least $\Pr[G_2]^2 / q_H - 1/q$. Subtracting the two verification equations gives:
@@ -135,18 +165,19 @@ which extracts $\mathbf{s}^* = (c_1 - c_2)^{-1}(\mathbf{z}_1 - \mathbf{z}_2) \bm
 \label{thm:rescue}
 Let $F : \{0,1\}^* \to \{0,1\}^n$ be modeled as a quantum random oracle under Zhandry's compressed oracle framework~\cite{zhandry2019}. For any quantum adversary $\mathcal{A}$ making at most $q_F$ superposition queries before Reveal Tx2 (even when $\mathcal{A}$ holds the compromised classical key $sk_{\mathrm{child}}$),
 \begin{equation}
-\mathrm{Adv}^{\mathrm{Rescue\text{-}QROM}}(\mathcal{A})
-\le \mathrm{Adv}^{\mathrm{PoK/MSIS}}_{\mathbb{F}_q^{32}}(\mathcal{B}_1)
-+ \mathrm{Adv}^{\mathrm{Pre}}_{\mathrm{HMAC\text{-}SHA512}}(\mathcal{B}_2)
-+ \frac{8(q_F + 1)^2 + 32 q_F^3}{2^n}
-+ \mathrm{negl}(\lambda).
+\begin{aligned}
+&\mathrm{Adv}^{\mathrm{Rescue\text{-}QROM}}(\mathcal{A}) \\
+  &\quad \le \mathrm{Adv}^{\mathrm{PoK/MSIS}}_{\mathbb{F}_q^{32}}(\mathcal{B}_1)
+   + \mathrm{Adv}^{\mathrm{Pre}}_{\mathrm{HMAC\text{-}SHA512}}(\mathcal{B}_2) \\
+  &\qquad + \frac{8(q_F + 1)^2 + 32 q_F^3}{2^n} + \mathrm{negl}(\lambda).
+\end{aligned}
 \end{equation}
 \end{theorem}
 
 \begin{proof}
 An adversary winning $\mathsf{Exp}^{\mathrm{Rescue\text{-}QROM}}(\mathcal{A})$ must either (Case~A) forge the $580\text{ B}$ Knowledge-Asymmetry witness for an adversarial destination $\mathsf{pqc\_dest}^* \ne \mathsf{pqc\_dest}$ without possessing $c_{\mathrm{par}}$, or (Case~B) hijack an in-flight honest rescue by forging a Dual-Commit XOR reveal $(x^*, m^*_{\mathrm{rescue}})$ matching Commit Tx1 $C$ before honest Reveal Tx2 settles.
 
-\textbf{Case A (Knowledge Extraction of $c_{\mathrm{par}}$):} To pass snapshot verification, $\mathbf{b}_{\mathrm{KA}}$ is fixed by the pre-sunset commitment $\mathrm{public\_asymmetry\_tag} = H(\mathbf{b}_{\mathrm{KA}} \parallel \mathsf{utxo\_id} \parallel \mathrm{addr})$ inside $\mathsf{root}_{\mathrm{UTXO}}$. Rewinding the Fiat-Shamir lattice PoK $(h_w, c_{\mathrm{FS}}, \mathbf{z}_{\mathrm{KA}})$ over $\mathbb{F}_q^{32}$ extracts a valid witness $\mathbf{s}_{\mathrm{KA}}$ satisfying $\mathbf{A}_{\mathrm{KA}}\mathbf{s}_{\mathrm{KA}} \equiv \mathbf{b}_{\mathrm{KA}} \pmod q$ (bounded by $\mathrm{Adv}^{\mathrm{PoK/MSIS}}_{\mathbb{F}_q^{32}}(\mathcal{B}_1)$). Because $\mathbf{s}_{\mathrm{KA}}$ is derived from $\mathrm{HMAC\text{-}SHA3\text{-}256}(c_{\mathrm{par}}, P_{\mathrm{par}} \parallel i \parallel \mathrm{addr})$ and $c_{\mathrm{par}}$ is a $256$-bit symmetric key never revealed by $P_{\mathrm{child}}$ or $sk_{\mathrm{child}}$, recovering $c_{\mathrm{par}}$ reduces to inverting HMAC-SHA512 ($\mathrm{Adv}^{\mathrm{Pre}}_{\mathrm{HMAC\text{-}SHA512}}(\mathcal{B}_2)$).
+\textbf{Case A (Knowledge Extraction of $c_{\mathrm{par}}$):} To pass snapshot verification, $\mathbf{b}_{\mathrm{KA}}$ is fixed by the pre-sunset commitment \texttt{public\_\allowbreak asymmetry\_\allowbreak tag} $= H(\mathbf{b}_{\mathrm{KA}} \parallel \mathsf{utxo\_id} \parallel \mathrm{addr})$ inside $\mathsf{root}_{\mathrm{UTXO}}$. Rewinding the Fiat-Shamir lattice PoK $(h_w, c_{\mathrm{FS}}, \mathbf{z}_{\mathrm{KA}})$ over $\mathbb{F}_q^{32}$ extracts a valid witness $\mathbf{s}_{\mathrm{KA}}$ satisfying $\mathbf{A}_{\mathrm{KA}}\mathbf{s}_{\mathrm{KA}} \equiv \mathbf{b}_{\mathrm{KA}} \pmod q$ (bounded by $\mathrm{Adv}^{\mathrm{PoK/MSIS}}_{\mathbb{F}_q^{32}}(\mathcal{B}_1)$). Because $\mathbf{s}_{\mathrm{KA}}$ is derived from $\mathrm{HMAC\text{-}SHA3\text{-}256}(c_{\mathrm{par}}, P_{\mathrm{par}} \parallel i \parallel \mathrm{addr})$ and $c_{\mathrm{par}}$ is a $256$-bit symmetric key never revealed by $P_{\mathrm{child}}$ or $sk_{\mathrm{child}}$, recovering $c_{\mathrm{par}}$ reduces to inverting HMAC-SHA512 ($\mathrm{Adv}^{\mathrm{Pre}}_{\mathrm{HMAC\text{-}SHA512}}(\mathcal{B}_2)$).
 
 \textbf{Case B (Zhandry QROM Front-Running Bound):} Given honest Commit Tx1 $C = F_{\mathrm{PRE}}(x) \oplus F_{\mathrm{MSG}}(x \parallel m_{\mathrm{rescue}})$ locked for $\Delta_{\text{eff}} \ge \Delta^*(\epsilon)$ blocks before $x$ is revealed, substituting $\mathsf{pqc\_dest}^* \ne \mathsf{pqc\_dest}$ yields $m^*_{\mathrm{rescue}} \ne m_{\mathrm{rescue}}$. By Zhandry's compressed oracle purification and the O2H reprogramming lemma~\cite{zhandry2019,aqmp2026}, any quantum adversary making $q_F$ superposition queries to $F$ hits preimage $x$ with probability at most $8(q_F + 1)^2 / 2^n$ or finds an oracle collision with probability at most $32 q_F^3 / 2^n$. Taking a union bound over Cases~A and~B yields the stated bound.
 \end{proof}
@@ -154,10 +185,11 @@ An adversary winning $\mathsf{Exp}^{\mathrm{Rescue\text{-}QROM}}(\mathcal{A})$ m
 \section{Empirical Benchmarks and Security Verification}
 \label{sec:benchmarks}
 
-We benchmarked both modules in \texttt{research/benchmark\_paper2\_mpc\_rescue.py} and validated all invariants via 59 automated pytest checks (\texttt{test\_paper2\_mpc\_rescue.py} plus AQMP v2.0 and QROM suites). Table~\ref{tab:mpc} and Fig.~\ref{fig:mpc} report measured quorum latency and block payload scaling across $t$-of-$n$ custody committees. Table~\ref{tab:rescue} and Fig.~\ref{fig:rescue} compare our $676\text{ B}$ UTXO rescue cycle against Lifeboat ($3{,}420\text{ B}$), Dropkick ($3{,}904\text{ B}$), and Naive ML-DSA-65 ($5{,}261\text{ B}$), alongside measured proof creation ($1.97\text{ ms}$ mean) and verification ($1.05\text{ ms}$ mean) latency under Fukuda gating ($\Delta^* \in \{5, 6, 8, 16, 40\}$).
+We benchmarked both modules in \texttt{research/\allowbreak benchmark\_\allowbreak paper2\_\allowbreak mpc\_\allowbreak rescue.py} and validated all invariants via 59 automated pytest checks (\texttt{test\_paper2\_\allowbreak mpc\_\allowbreak rescue.py} plus AQMP v2.0 and QROM suites). Table~\ref{tab:mpc} and Fig.~\ref{fig:mpc} report measured quorum latency and block payload scaling across $t$-of-$n$ custody committees. Table~\ref{tab:rescue} and Fig.~\ref{fig:rescue} compare our $676\text{ B}$ UTXO rescue cycle against Lifeboat ($3{,}420\text{ B}$), Dropkick ($3{,}904\text{ B}$), and Naive ML-DSA-65 ($5{,}261\text{ B}$), alongside measured proof creation ($1.97\text{ ms}$ mean) and verification ($1.05\text{ ms}$ mean) latency under Fukuda gating ($\Delta^* \in \{5, 6, 8, 16, 40\}$).
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
+\footnotesize
 \caption{Stateless PQ-MPC Latency and Block Payload ($N = 250$ Tx/Block)}
 \label{tab:mpc}
 \begin{tabular}{@{}ccccc@{}}
@@ -171,10 +203,11 @@ Quorum ($t$-of-$n$) & Sign (ms) & Verify (ms) & Plonky3 + KeyReg (B) & Naive $t$
 7-of-11 & 87.73 & 3.90 & 11,300 & 9,206,750 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
+\footnotesize
 \caption{Frozen UTXO Rescue Footprint Comparison}
 \label{tab:rescue}
 \begin{tabular}{@{}lrr@{}}
@@ -187,7 +220,7 @@ Dropkick (ZK Seed Recovery Proof) & 3,904 B & 25.79\% \\
 Naive ML-DSA-65 Spend (Baseline) & 5,261 B & 0.00\% \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \begin{figure*}[t]
 \centering
