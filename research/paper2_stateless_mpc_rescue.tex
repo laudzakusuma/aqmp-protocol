@@ -14,9 +14,12 @@
 \title{Stateless Post-Quantum Threshold Custody and Knowledge-Asymmetry Frozen UTXO Rescue:\\
 Resolving Multi-Zone State Hazards and Legacy Quantum Sunset Risks}
 
-\author{\IEEEauthorblockN{Laudza Kusuma}
-\IEEEauthorblockA{Independent Researcher\\
-\texttt{laudza@aqmp.protocol}}}
+\author{
+  \IEEEauthorblockN{Laudza Kusuma}
+  \IEEEauthorblockA{Independent Researcher, Depok, Indonesia\\
+  Email: laudzaxie@gmail.com\\
+  Web: \url{https://laudzakusuma.github.io}}
+}
 
 \begin{document}
 \maketitle
@@ -89,6 +92,65 @@ To block mempool destination hijacking during rescue, the $580\text{ B}$ witness
 \end{equation}
 where $m_{\text{rescue}}$ encodes $(\mathsf{utxo\_id}, \mathsf{satoshis}, \mathsf{pqc\_dest}, \kappa, h_w, c_{\text{FS}})$. Consensus enforces Fukuda's confirmation window $\Delta_{\text{eff}} \ge \Delta^*(\epsilon) = \lceil 4/(1-\epsilon)\rceil$ before Tx2 finalizes. Total on-chain rescue payload is $580 + 96 = 676\text{ B}$.
 
+\section{Formal Security Model and Proofs}
+\label{sec:security}
+
+We formalize unforgeability for both constructions in self-contained reduction proofs suitable for independent verification.
+
+\begin{definition}[TS-UF-CMA with Cold-Backup Resets]
+Let $\Pi_{\mathrm{MPC}}$ be a $t$-of-$n$ stateless threshold signature scheme over $\mathbb{F}_q^d$. In experiment $\mathsf{Exp}^{\mathrm{TS\text{-}UF\text{-}CMA}}_{\Pi_{\mathrm{MPC}}}(\mathcal{A})$, adversary $\mathcal{A}$ corrupts a subset $\mathcal{C} \subset \{1, \dots, n\}$ of size $|\mathcal{C}| \le t - 1$, receives $\{\mathsf{Share}_j\}_{j \in \mathcal{C}}$ together with public key $(\mathsf{seed}_{\mathbf{A}}, \mathbf{b}, \{\mathsf{com}_i\}_{i=1}^n)$, and makes up to $q_H$ random oracle queries and $q_S$ partial signing queries on tuples $(i, m, S, \sigma)$ for honest signers $i \notin \mathcal{C}$. At any point, $\mathcal{A}$ may issue a $\mathsf{Reset}(i)$ oracle call wiping volatile memory on node $i$ and restoring $\mathsf{Share}_i$ from cold backup. $\mathcal{A}$ wins if it outputs $(m^*, \mathbf{W}^*, \mathbf{z}^*, c^*)$ verifying under $\mathbf{b}$ such that $m^*$ was never queried to a full signing quorum of size $t$.
+\end{definition}
+
+\begin{definition}[Rescue-QROM Soundness and Anti-Front-Running]
+In experiment $\mathsf{Exp}^{\mathrm{Rescue\text{-}QROM}}(\mathcal{A})$, the challenger samples an unhardened BIP-32 wallet $(c_{\mathrm{par}}, P_{\mathrm{par}}, i)$ producing frozen output $\mathrm{Hash160}(P_{\mathrm{child}})$ and snapshot tag $H(\mathbf{b}_{\mathrm{KA}} \parallel \mathsf{utxo\_id} \parallel \mathrm{addr})$ inside $\mathsf{root}_{\mathrm{UTXO}}$. Adversary $\mathcal{A}$ is given $P_{\mathrm{child}}$, the classical ECDSA secret key $sk_{\mathrm{child}}$ (modeling a full CRQC break of secp256k1), and the public Commit Tx1 $C = F_{\mathrm{PRE}}(x) \oplus F_{\mathrm{MSG}}(x \parallel m_{\mathrm{rescue}})$ while making at most $q_F$ quantum superposition queries to $F$ prior to Reveal Tx2 within Fukuda's window $\Delta_{\text{eff}} \ge \Delta^*(\epsilon)$. $\mathcal{A}$ wins if it outputs a valid $676\text{ B}$ rescue bundle redirecting the frozen UTXO to an adversarial destination $\mathsf{pqc\_dest}^* \ne \mathsf{pqc\_dest}$.
+\end{definition}
+
+\begin{theorem}[Stateless PQ-MPC Unforgeability and Backup-Reset Safety]
+\label{thm:mpc}
+Assuming $\mathrm{HMAC\text{-}SHA3\text{-}256}$ is a secure PRF and the underlying module-lattice relation $\mathbf{A}\mathbf{s} \equiv \mathbf{b} \pmod q$ is hard against key recovery, for any adversary $\mathcal{A}$ corrupting at most $t - 1$ signers and making $q_H$ random oracle queries and $q_S$ signing queries (including arbitrary cold-backup resets),
+\begin{equation}
+\mathrm{Adv}^{\mathrm{TS\text{-}UF\text{-}CMA}}_{\Pi_{\mathrm{MPC}}}(\mathcal{A})
+\le (n - t + 1)\,\mathrm{Adv}^{\mathrm{PRF}}_{\mathrm{HMAC}}(\mathcal{B}_{\mathrm{PRF}}) + \sqrt{q_H \cdot \mathrm{Adv}^{\mathrm{MLWE/MSIS}}_{\mathbb{F}_q^d}(\mathcal{B}_{\mathrm{Lat}})} + \frac{q_H + q_S}{q}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+We transition through three games $G_0 \to G_1 \to G_2$:
+
+\textbf{Game 0 (Real Execution):} $\mathcal{A}$ interacts with the real $\mathsf{Exp}^{\mathrm{TS\text{-}UF\text{-}CMA}}_{\Pi_{\mathrm{MPC}}}(\mathcal{A})$ challenger. Because $\mathsf{Share}_i$ contains no mutable state register, every $\mathsf{Reset}(i)$ call leaves $\mathsf{Share}_i$ bit-identical, so $\mathrm{Adv}^{\mathrm{TS\text{-}UF\text{-}CMA}}_{\Pi_{\mathrm{MPC}}}(\mathcal{A}) = \Pr[G_0]$.
+
+\textbf{Game 1 (PRF-to-Random Nonce Table Replacement):} For each honest signer $i \notin \mathcal{C}$, replace $r_i = \mathrm{HMAC\text{-}SHA3\text{-}256}(k_i, \cdot)$ with an internal lazy random function table $T_i[m, \mathsf{com}_i, S, \sigma]$. Repeated queries after $\mathsf{Reset}(i)$ on the same $(m, S, \sigma)$ return the identical cached nonce $\mathbf{y}_i$ (preserving exact backup-restore determinism), while every fresh tuple $(m', S', \sigma')$ receives an independent uniform nonce $\mathbf{y}_i' \xleftarrow{\$} \mathbb{F}_q^d$. By a standard hybrid argument over the $n - |\mathcal{C}| \le n - t + 1$ honest signers,
+\begin{equation}
+|\Pr[G_0] - \Pr[G_1]| \le (n - t + 1)\,\mathrm{Adv}^{\mathrm{PRF}}_{\mathrm{HMAC}}(\mathcal{B}_{\mathrm{PRF}}).
+\end{equation}
+
+\textbf{Game 2 (Zero-Knowledge Simulation and General Forking Lemma):} Given a lattice challenge instance $(\mathbf{A}, \mathbf{b})$, the reduction $\mathcal{B}_{\mathrm{Lat}}$ samples the $|\mathcal{C}| \le t - 1$ corrupted shares $\{\mathbf{s}_j\}_{j \in \mathcal{C}}$ uniformly from $\mathbb{F}_q^d$, which fixes the public commitments $\mathsf{com}_i$ of all honest signers $i \notin \mathcal{C}$ via Lagrange interpolation in the linear exponent using $\mathbf{b}$. On each honest partial signing query, $\mathcal{B}_{\mathrm{Lat}}$ samples $\mathbf{z}_i \xleftarrow{\$} \mathbb{F}_q^d$, programs the Fiat-Shamir challenge $c \xleftarrow{\$} \mathbb{F}_q$ on $(\mathbf{W}, H(m), \mathsf{root}_{\text{P2MR}}, \mathsf{idx}_{\text{KeyReg}})$, and sets $\mathbf{w}_i = \mathbf{A}\mathbf{z}_i - (c\lambda_{i,S})\mathsf{com}_i \bmod q$, aborting only on an accidental oracle collision (probability at most $(q_H + q_S)/q$). By the General Forking Lemma~\cite{bellare2006}, rewinding a successful forger $\mathcal{A}$ on the target query yields two valid forgeries $(\mathbf{W}^*, c_1, \mathbf{z}_1)$ and $(\mathbf{W}^*, c_2, \mathbf{z}_2)$ with $c_1 \ne c_2 \bmod q$ with probability at least $\Pr[G_2]^2 / q_H - 1/q$. Subtracting the two verification equations gives:
+\begin{equation}
+\mathbf{A}(\mathbf{z}_1 - \mathbf{z}_2) \equiv (c_1 - c_2)\mathbf{b} \pmod q,
+\end{equation}
+which extracts $\mathbf{s}^* = (c_1 - c_2)^{-1}(\mathbf{z}_1 - \mathbf{z}_2) \bmod q$ satisfying $\mathbf{A}\mathbf{s}^* \equiv \mathbf{b} \pmod q$, bounding $\Pr[G_2] \le \sqrt{q_H \cdot \mathrm{Adv}^{\mathrm{MLWE/MSIS}}_{\mathbb{F}_q^d}(\mathcal{B}_{\mathrm{Lat}})} + (q_H + q_S)/q$. Combining the game hops completes the proof.
+\end{proof}
+
+\begin{theorem}[676-Byte UTXO Rescue Soundness and QROM Front-Running Resistance]
+\label{thm:rescue}
+Let $F : \{0,1\}^* \to \{0,1\}^n$ be modeled as a quantum random oracle under Zhandry's compressed oracle framework~\cite{zhandry2019}. For any quantum adversary $\mathcal{A}$ making at most $q_F$ superposition queries before Reveal Tx2 (even when $\mathcal{A}$ holds the compromised classical key $sk_{\mathrm{child}}$),
+\begin{equation}
+\mathrm{Adv}^{\mathrm{Rescue\text{-}QROM}}(\mathcal{A})
+\le \mathrm{Adv}^{\mathrm{PoK/MSIS}}_{\mathbb{F}_q^{32}}(\mathcal{B}_1)
++ \mathrm{Adv}^{\mathrm{Pre}}_{\mathrm{HMAC\text{-}SHA512}}(\mathcal{B}_2)
++ \frac{8(q_F + 1)^2 + 32 q_F^3}{2^n}
++ \mathrm{negl}(\lambda).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+An adversary winning $\mathsf{Exp}^{\mathrm{Rescue\text{-}QROM}}(\mathcal{A})$ must either (Case~A) forge the $580\text{ B}$ Knowledge-Asymmetry witness for an adversarial destination $\mathsf{pqc\_dest}^* \ne \mathsf{pqc\_dest}$ without possessing $c_{\mathrm{par}}$, or (Case~B) hijack an in-flight honest rescue by forging a Dual-Commit XOR reveal $(x^*, m^*_{\mathrm{rescue}})$ matching Commit Tx1 $C$ before honest Reveal Tx2 settles.
+
+\textbf{Case A (Knowledge Extraction of $c_{\mathrm{par}}$):} To pass snapshot verification, $\mathbf{b}_{\mathrm{KA}}$ is fixed by the pre-sunset commitment $\mathrm{public\_asymmetry\_tag} = H(\mathbf{b}_{\mathrm{KA}} \parallel \mathsf{utxo\_id} \parallel \mathrm{addr})$ inside $\mathsf{root}_{\mathrm{UTXO}}$. Rewinding the Fiat-Shamir lattice PoK $(h_w, c_{\mathrm{FS}}, \mathbf{z}_{\mathrm{KA}})$ over $\mathbb{F}_q^{32}$ extracts a valid witness $\mathbf{s}_{\mathrm{KA}}$ satisfying $\mathbf{A}_{\mathrm{KA}}\mathbf{s}_{\mathrm{KA}} \equiv \mathbf{b}_{\mathrm{KA}} \pmod q$ (bounded by $\mathrm{Adv}^{\mathrm{PoK/MSIS}}_{\mathbb{F}_q^{32}}(\mathcal{B}_1)$). Because $\mathbf{s}_{\mathrm{KA}}$ is derived from $\mathrm{HMAC\text{-}SHA3\text{-}256}(c_{\mathrm{par}}, P_{\mathrm{par}} \parallel i \parallel \mathrm{addr})$ and $c_{\mathrm{par}}$ is a $256$-bit symmetric key never revealed by $P_{\mathrm{child}}$ or $sk_{\mathrm{child}}$, recovering $c_{\mathrm{par}}$ reduces to inverting HMAC-SHA512 ($\mathrm{Adv}^{\mathrm{Pre}}_{\mathrm{HMAC\text{-}SHA512}}(\mathcal{B}_2)$).
+
+\textbf{Case B (Zhandry QROM Front-Running Bound):} Given honest Commit Tx1 $C = F_{\mathrm{PRE}}(x) \oplus F_{\mathrm{MSG}}(x \parallel m_{\mathrm{rescue}})$ locked for $\Delta_{\text{eff}} \ge \Delta^*(\epsilon)$ blocks before $x$ is revealed, substituting $\mathsf{pqc\_dest}^* \ne \mathsf{pqc\_dest}$ yields $m^*_{\mathrm{rescue}} \ne m_{\mathrm{rescue}}$. By Zhandry's compressed oracle purification and the O2H reprogramming lemma~\cite{zhandry2019,aqmp2026}, any quantum adversary making $q_F$ superposition queries to $F$ hits preimage $x$ with probability at most $8(q_F + 1)^2 / 2^n$ or finds an oracle collision with probability at most $32 q_F^3 / 2^n$. Taking a union bound over Cases~A and~B yields the stated bound.
+\end{proof}
+
 \section{Empirical Benchmarks and Security Verification}
 \label{sec:benchmarks}
 
@@ -148,6 +210,8 @@ Stateless synthetic-PRF lattice threshold signing eliminates backup-restore nonc
 
 \begin{thebibliography}{9}
 \bibitem{aqmp2026} L. Kusuma, ``Breaking the Post-Quantum Cryptography Blockchain Migration Trilemma: AQMP v2.0,'' Zenodo Record 24303569, 2026.
+\bibitem{bellare2006} M. Bellare and G. Neven, ``Multi-signatures in the plain public-key model and a general forking lemma,'' in \emph{ACM CCS}, 2006, pp. 390-399.
+\bibitem{zhandry2019} M. Zhandry, ``How to record quantum queries, and applications to quantum indifferentiability,'' in \emph{CRYPTO}, 2019, pp. 239-268.
 \bibitem{bip360} H. E. Hunter et al., ``BIP-360: Pay-to-Merkle-Root (P2MR),'' Bitcoin Improvement Proposals, 2025.
 \bibitem{bip361} A. L. Corbit et al., ``BIP-361: Post-Quantum Migration and Legacy Output Sunsetting,'' Bitcoin Improvement Proposals, 2026.
 \bibitem{nist2024} NIST, ``Module-Lattice-Based Digital Signature Standard (FIPS 204),'' 2024.
